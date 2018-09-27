@@ -1,0 +1,141 @@
+#!/usr/bin/env ruby
+
+require 'optparse'
+require 'json'
+require 'logger'
+
+require 'awesome_print'
+
+# https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
+require 'readline'
+
+# Readline setup START
+COMMANDS = [
+  'all',
+  'create',
+  'overdues',
+]
+comp = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
+
+Readline.completion_append_character = ''
+Readline.completion_proc = comp
+# Readline setup END
+
+# Setup:
+# apt-get install ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic
+require 'sequel'
+require 'terminal-table'
+require 'chronic'
+
+Options = Struct.new(:create_db)
+args = Options.new
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: #{File.basename($0)} [options]"
+
+  opts.on('-c', '--create-db', 'Create database') do
+    args.create_db = true
+  end
+end.parse!
+
+ap(args)
+
+DB = Sequel.sqlite(File.expand_path('~/.reminders.sqlite'))
+DB.logger = Logger.new(STDOUT)
+
+DB.execute('
+  CREATE TABLE IF NOT EXISTS reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT
+    , priority INTEGER NOT NULL DEFAULT 0
+    , trigger_on DATETIME NULL
+    , descr VARCHAR(255) NOT NULL
+  );
+')
+
+Reminder = DB[:reminders]
+
+def table(reminders)
+  rs = reminders.map { |r| r.values_at(:id, :priority, :trigger_on, :descr) }
+  table = Terminal::Table.new(
+    headings: [:id, :priority, :trigger_on, :descr],
+    rows: rs,
+  )
+  puts(table)
+end
+
+def by_priority
+  [Sequel.desc(:priority), Sequel.asc(:trigger_on)]
+end
+
+def by_trigger_on
+  [:trigger_on, Sequel.desc(:priority)]
+end
+
+def all_by_priority
+  Reminder.order(*by_priority)
+end
+
+def all_by_trigger_on
+  Reminder.order(*by_trigger_on)
+end
+
+OVERDUE_COND = proc do
+  (priority >=0) & (trigger_on <= Time.now)
+end
+
+def overdues_by_priority
+  all_by_priority.where(&OVERDUE_COND)
+end
+
+def overdues_by_trigger_on
+  all_by_trigger_on.where(&OVERDUE_COND)
+end
+
+def ask(attribute)
+  print("#{attribute}: ")
+  res = gets.chomp
+  return nil if res.empty?
+  res
+end
+
+def ensure_date(val)
+  # return if val.nil?
+  # Date.parse('2018-09-01')
+  Chronic.parse(val)
+end
+
+def build_reminder
+  {
+    descr: ask('descr'),
+    trigger_on: ensure_date(ask('trigger_on')),
+    priority: ask('priority'),
+  }
+end
+
+while (line = Readline.readline('> ', true))
+  cmd = line.rstrip
+  case cmd
+  when 'all'
+    table(all_by_priority)
+  when 'all2'
+    table(all_by_trigger_on)
+  when 'overdues'
+    table(overdues_by_priority)
+  when 'overdues2'
+    table(overdues_by_trigger_on)
+  when 'create'
+    r = build_reminder
+    ap(r)
+    Reminder.insert(
+      descr: r.fetch(:descr),
+      trigger_on: r.fetch(:trigger_on),
+      priority: r.fetch(:priority),
+    )
+  when 'rm'
+    Reminder.where(id: ask('id')).delete
+  else
+    puts("Oops: `#{cmd}`")
+  end
+end
+
+puts(table)
