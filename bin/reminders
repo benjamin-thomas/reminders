@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'json'
 require 'logger'
 
 require 'awesome_print'
@@ -30,14 +29,18 @@ require 'sequel'
 require 'terminal-table'
 require 'chronic'
 
-Options = Struct.new(:create_db)
+Options = Struct.new(:create_db, :notify)
 args = Options.new
 
 OptionParser.new do |opts|
   opts.banner = "Usage: #{File.basename($0)} [options]"
 
-  opts.on('-c', '--create-db', 'Create database') do
+  opts.on('--create-db', 'Create database') do
     args.create_db = true
+  end
+
+  opts.on('--notify', 'Warn every minute about overdue reminders with notify-send') do
+    args.notify = true
   end
 end.parse!
 
@@ -46,14 +49,16 @@ ap(args)
 DB = Sequel.sqlite(File.expand_path('~/.reminders.sqlite'))
 DB.logger = Logger.new(STDOUT)
 
-DB.execute('
+if args.create_db
+  DB.execute('
   CREATE TABLE IF NOT EXISTS reminders (
       id INTEGER PRIMARY KEY AUTOINCREMENT
     , priority INTEGER NOT NULL DEFAULT 0
     , trigger_on DATETIME NULL
     , descr VARCHAR(255) NOT NULL
   );
-')
+             ')
+end
 
 # Reminder = DB[:reminders]
 
@@ -141,44 +146,63 @@ def edit_reminder(id)
   [r, build_reminder(descr: r.descr, trigger_on: r.trigger_on, priority: r.priority)]
 end
 
-while (line = Readline.readline('> ', true))
-  cmd = line.rstrip
-  case cmd
-  when 'all'
-    table(all_by_priority)
-  when 'all2'
-    table(all_by_trigger_on)
-  when 'overdues'
-    table(overdues_by_priority)
-  when 'overdues2'
-    table(overdues_by_trigger_on)
-  when 'create'
-  else
-    if (m = /^rm (?<id>\d+)/.match(cmd))
-      Reminder.find(id: m[:id]).delete
-      next
-    elsif (m = /^edit (?<id>\d+)/.match(cmd))
-      loop do
-        r, h = edit_reminder(m[:id])
-        ap(h)
-        r.descr = h.fetch(:descr)
-        r.trigger_on = h.fetch(:trigger_on)
-        r.priority =  h.fetch(:priority)
-        if r.valid?
-          r.save
-          break
+def run_cli
+  while (line = Readline.readline('> ', true))
+    cmd = line.rstrip
+    case cmd
+    when 'all'
+      table(all_by_priority)
+    when 'all2'
+      table(all_by_trigger_on)
+    when 'overdues'
+      table(overdues_by_priority)
+    when 'overdues2'
+      table(overdues_by_trigger_on)
+    when 'create'
+    else
+      if (m = /^rm (?<id>\d+)/.match(cmd))
+        Reminder.find(id: m[:id]).delete
+        next
+      elsif (m = /^edit (?<id>\d+)/.match(cmd))
+        loop do
+          r, h = edit_reminder(m[:id])
+          ap(h)
+          r.descr = h.fetch(:descr)
+          r.trigger_on = h.fetch(:trigger_on)
+          r.priority =  h.fetch(:priority)
+          if r.valid?
+            r.save
+            break
+          end
+          ap(r.errors)
         end
-        ap(r.errors)
+        next
       end
-      next
-    end
 
-    r = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
-    ap(r)
-    Reminder.insert(
-      descr: r.fetch(:descr),
-      trigger_on: r.fetch(:trigger_on),
-      priority: r.fetch(:priority),
-    )
+      r = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
+      ap(r)
+      Reminder.insert(
+        descr: r.fetch(:descr),
+        trigger_on: r.fetch(:trigger_on),
+        priority: r.fetch(:priority),
+      )
+    end
   end
 end
+
+def run_notifier!
+  loop do
+    overdues = overdues_by_priority
+    overdues.each do |o|
+      `notify-send -u critical "Priority=#{o.priority}: #{o.descr}"`
+    end
+    sleep(60)
+  end
+end
+
+if args.notify
+  run_notifier!
+  fail 'Impossible'
+end
+
+run_cli
