@@ -6,19 +6,22 @@ require 'logger'
 
 require 'awesome_print'
 
+ONE_HOUR = 60 * 60
+
 # https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
 require 'readline'
 
 # Readline setup START
 COMMANDS = [
   'all',
-  'create',
   'overdues',
+  'rm ',
+  'edit ',
 ]
-comp = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
+COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
+Readline.completion_proc = COMMANDS_COMP
 Readline.completion_append_character = ''
-Readline.completion_proc = comp
 # Readline setup END
 
 # Setup:
@@ -52,10 +55,20 @@ DB.execute('
   );
 ')
 
-Reminder = DB[:reminders]
+# Reminder = DB[:reminders]
+
+class Reminder < Sequel::Model(DB[:reminders])
+  def validate
+    super
+    errors.add(:priority, 'cannot be nil') if priority.nil?
+    errors.add(:descr, 'cannot be empty') if descr.nil? || descr.empty?
+    errors.add(:trigger_on, 'cannot be empty on non negative priority') if priority >= 0 && trigger_on.nil?
+    errors.add(:trigger_on, 'should be nil on negative priority') if priority < 0 && trigger_on
+  end
+end
 
 def table(reminders)
-  rs = reminders.map { |r| r.values_at(:id, :priority, :trigger_on, :descr) }
+  rs = reminders.map { |r| r.values.values_at(:id, :priority, :trigger_on, :descr) }
   table = Terminal::Table.new(
     headings: [:id, :priority, :trigger_on, :descr],
     rows: rs,
@@ -68,7 +81,8 @@ def by_priority
 end
 
 def by_trigger_on
-  [:trigger_on, Sequel.desc(:priority)]
+  # [:trigger_on, Sequel.desc(:priority)]
+  [Sequel.lit('CASE WHEN trigger_on IS NULL THEN 1 ELSE 0 END, trigger_on ASC'), Sequel.desc(:priority)]
 end
 
 def all_by_priority
@@ -91,10 +105,20 @@ def overdues_by_trigger_on
   all_by_trigger_on.where(&OVERDUE_COND)
 end
 
-def ask(attribute)
-  print("#{attribute}: ")
-  res = gets.chomp
+def ask(attribute, prefill = nil)
+  if prefill
+    Readline.pre_input_hook = -> {
+      Readline.insert_text(prefill.to_s)
+      Readline.redisplay
+    }
+  end
+
+  line = Readline.readline("#{attribute}: ")
+
+  Readline.pre_input_hook = nil
+  res = line.rstrip
   return nil if res.empty?
+
   res
 end
 
@@ -104,12 +128,17 @@ def ensure_date(val)
   Chronic.parse(val)
 end
 
-def build_reminder
+def build_reminder(descr:, trigger_on:, priority:)
   {
-    descr: ask('descr'),
-    trigger_on: ensure_date(ask('trigger_on')),
-    priority: ask('priority'),
+    descr: ask('descr', descr),
+    trigger_on: ensure_date(ask('trigger_on', trigger_on)),
+    priority: ask('priority', priority),
   }
+end
+
+def edit_reminder(id)
+  r = Reminder.first!(id: id)
+  [r, build_reminder(descr: r.descr, trigger_on: r.trigger_on, priority: r.priority)]
 end
 
 while (line = Readline.readline('> ', true))
@@ -124,18 +153,32 @@ while (line = Readline.readline('> ', true))
   when 'overdues2'
     table(overdues_by_trigger_on)
   when 'create'
-    r = build_reminder
+  else
+    if (m = /^rm (?<id>\d+)/.match(cmd))
+      Reminder.find(id: m[:id]).delete
+      next
+    elsif (m = /^edit (?<id>\d+)/.match(cmd))
+      loop do
+        r, h = edit_reminder(m[:id])
+        ap(h)
+        r.descr = h.fetch(:descr)
+        r.trigger_on = h.fetch(:trigger_on)
+        r.priority =  h.fetch(:priority)
+        if r.valid?
+          r.save
+          break
+        end
+        ap(r.errors)
+      end
+      next
+    end
+
+    r = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
     ap(r)
     Reminder.insert(
       descr: r.fetch(:descr),
       trigger_on: r.fetch(:trigger_on),
       priority: r.fetch(:priority),
     )
-  when 'rm'
-    Reminder.where(id: ask('id')).delete
-  else
-    puts("Oops: `#{cmd}`")
   end
 end
-
-puts(table)
