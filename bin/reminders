@@ -176,6 +176,7 @@ def run_cli
           end
           ap(r.errors)
         end
+        table(overdues_by_priority)
         next
       end
 
