@@ -2,6 +2,7 @@
 
 require 'optparse'
 require 'logger'
+require 'csv'
 
 require 'awesome_print'
 
@@ -47,13 +48,18 @@ end.parse!
 
 ap(args)
 
-DB = Sequel.sqlite(ENV.fetch('REMINDERS_DB_PATH'))
+DB_PATH = ENV.fetch('REMINDERS_DB_PATH')
+DB_DIR = File.dirname(DB_PATH)
+DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
+
+DB = Sequel.sqlite(DB_PATH)
 DB.logger = Logger.new(STDOUT)
 
 if args.create_db
   DB.execute('
   CREATE TABLE IF NOT EXISTS reminders (
       id INTEGER PRIMARY KEY AUTOINCREMENT
+    , pos INTEGER NOT NULL UNIQUE
     , priority INTEGER NOT NULL DEFAULT 0
     , trigger_on DATETIME NULL
     , descr VARCHAR(255) NOT NULL
@@ -64,6 +70,16 @@ end
 # Reminder = DB[:reminders]
 
 class Reminder < Sequel::Model(DB[:reminders])
+  def self.next_available_pos
+    i = 0
+    loop do
+      i += 1
+      if find(pos: i).nil?
+        return(i)
+      end
+    end
+  end
+
   def validate
     super
     errors.add(:priority, 'cannot be nil') if priority.nil?
@@ -177,6 +193,11 @@ def run_cli
       - due              : list overdue reminders by priority first
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
+
+      Commands without tab completion (rarely used)
+
+      - export           : export data to '#{DB_EXPORT_PATH}'
+      - import           : restore data from '#{DB_EXPORT_PATH}'
       EOS
     when 'ls'
       table(all_by_trigger_on)
@@ -188,7 +209,34 @@ def run_cli
       table(overdues_by_trigger_on)
     when 'today'
       table(scheduled_today_by_priority)
-    when 'create'
+    when 'export'
+      CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
+        csv << ['priority', 'trigger_on', 'descr' ]
+        Reminder.all do |r|
+          csv << [r.priority, r.trigger_on, r.descr]
+        end
+      end
+      p(:OK)
+      print("Inspect export? (y|N)")
+      answer = gets.chomp
+      if answer == 'y'
+        # apt install csvtool
+        puts `csvtool readable "#{DB_EXPORT_PATH}"`
+
+        # pip install tabview
+        # system('tabview', DB_EXPORT_PATH)
+      end
+    when 'import'
+      CSV.foreach(DB_EXPORT_PATH, headers: true) do |row|
+        next_available = Reminder.next_available_pos
+
+        Reminder.insert(
+          pos: next_available,
+          descr: row.fetch('descr'),
+          trigger_on: row.fetch('trigger_on'),
+          priority: row.fetch('priority'),
+        )
+      end
     else
       if (m = /^!(?<id>\d+)/.match(cmd)) # delete
         Reminder.find(id: m[:id]).delete
