@@ -172,16 +172,16 @@ def run_cli
 
       Commands below are mostly available via tab completion
 
-      - ls               : list reminders by priority first
-      - ls2              : list reminders by trigger timestamp first
+      - ls               : list reminders by trigger timestamp first
+      - ls2              : list reminders by priority first
       - due              : list overdue reminders by priority first
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
       EOS
     when 'ls'
-      table(all_by_priority)
-    when 'ls2'
       table(all_by_trigger_on)
+    when 'ls2'
+      table(all_by_priority)
     when 'due'
       table(overdues_by_priority)
     when 'due2'
