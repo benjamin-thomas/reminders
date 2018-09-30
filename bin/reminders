@@ -5,7 +5,9 @@ require 'logger'
 
 require 'awesome_print'
 
-ONE_HOUR = 60 * 60
+ONE_MINUTE = 60
+ONE_HOUR   = ONE_MINUTE * 60
+ONE_DAY    = ONE_HOUR * 24
 
 # https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
 require 'readline'
@@ -152,15 +154,20 @@ def run_cli
     when 'help'
       puts <<~EOS
 
-      - 123<ENTER>     : edit reminder with ID=123
-      - !123<ENTER>    : delete reminder ID=123
+      - 123<ENTER>       : edit reminder with ID=123
+      - !123<ENTER>      : delete reminder ID=123
+      - #123 CODE<ENTER> : reschedule reminder ID=123
+          CODE can be as follows:
+            - 10m  : trigger in 10 minutes
+            -  3h  : trigger in 3 hours
+            -  5d  : trigger in 5 days
 
       Commands below are mostly available via tab completion
 
-      - ls             : list reminders by priority first
-      - ls2            : list reminders by trigger timestamp first
-      - due            : list overdue reminders by priority first
-      - due2           : list overdue reminders by trigger timestamp first
+      - ls               : list reminders by priority first
+      - ls2              : list reminders by trigger timestamp first
+      - due              : list overdue reminders by priority first
+      - due2             : list overdue reminders by trigger timestamp first
       EOS
     when 'ls'
       table(all_by_priority)
@@ -172,10 +179,31 @@ def run_cli
       table(overdues_by_trigger_on)
     when 'create'
     else
-      if (m = /^!(?<id>\d+)/.match(cmd))
+      if (m = /^!(?<id>\d+)/.match(cmd)) # delete
         Reminder.find(id: m[:id]).delete
         next
-      elsif (m = /^(?<id>\d+)/.match(cmd))
+      elsif (m = /^#(?<id>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
+        now = Time.now
+        r = Reminder.find(id: m[:id])
+
+        code = m[:code]
+        suffix = code[-1]
+        i = Integer(code[0..-2])
+        next_trigger_on = case suffix
+                          when 'm'
+                            now + i*ONE_MINUTE
+                          when 'h'
+                            now + i*ONE_HOUR
+                          when 'd'
+                            now + i*ONE_DAY
+                          else
+                            fail 'Impossible'
+                          end
+        res = r.update(trigger_on: next_trigger_on)
+        ap(res)
+        table(overdues_by_priority)
+        next
+      elsif (m = /^(?<id>\d+)/.match(cmd)) # edit
         loop do
           r, h = edit_reminder(m[:id])
           ap(h)
