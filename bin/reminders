@@ -90,9 +90,9 @@ class Reminder < Sequel::Model(DB[:reminders])
 end
 
 def table(reminders)
-  rs = reminders.map { |r| r.values.values_at(:id, :priority, :trigger_on, :descr) }
+  rs = reminders.map { |r| r.values.values_at(:pos, :priority, :trigger_on, :descr) }
   table = Terminal::Table.new(
-    headings: [:id, :priority, :trigger_on, :descr],
+    headings: [:pos, :priority, :trigger_on, :descr],
     rows: rs,
   )
   puts(table)
@@ -165,8 +165,8 @@ def build_reminder(descr:, trigger_on:, priority:)
   }
 end
 
-def edit_reminder(id)
-  r = Reminder.first!(id: id)
+def edit_reminder(pos)
+  r = Reminder.first!(pos: pos)
   [r, build_reminder(descr: r.descr, trigger_on: r.trigger_on, priority: r.priority)]
 end
 
@@ -178,9 +178,9 @@ def run_cli
     when 'help'
       puts <<~EOS
 
-      - 123<ENTER>       : edit reminder with ID=123
-      - !123<ENTER>      : delete reminder ID=123
-      - #123 CODE<ENTER> : reschedule reminder ID=123
+      - 123<ENTER>       : edit reminder with POS=123
+      - !123<ENTER>      : delete reminder POS=123
+      - #123 CODE<ENTER> : reschedule reminder POS=123
           CODE can be as follows:
             - 10m  : trigger in 10 minutes
             -  3h  : trigger in 3 hours
@@ -228,22 +228,27 @@ def run_cli
       end
     when 'import'
       CSV.foreach(DB_EXPORT_PATH, headers: true) do |row|
-        next_available = Reminder.next_available_pos
 
         Reminder.insert(
-          pos: next_available,
+          pos: Reminder.next_available_pos,
           descr: row.fetch('descr'),
           trigger_on: row.fetch('trigger_on'),
           priority: row.fetch('priority'),
         )
       end
     else
-      if (m = /^!(?<id>\d+)/.match(cmd)) # delete
-        Reminder.find(id: m[:id]).delete
+      if (m = /^!(?<pos>\d+)/.match(cmd)) # delete
+        # Don't like log message of query below (generates 2 queries, confusing UI wise)
+        DB.logger = nil
+        Reminder.find(pos: m[:pos]).delete
+        DB.logger = Logger.new(STDOUT)
+        p(:DELETE_OK)
+        table(overdues_by_priority)
+
         next
-      elsif (m = /^#(?<id>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
+      elsif (m = /^#(?<pos>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
         now = Time.now
-        r = Reminder.find(id: m[:id])
+        r = Reminder.find(pos: m[:pos])
 
         code = m[:code]
         suffix = code[-1]
@@ -262,9 +267,9 @@ def run_cli
         ap(res)
         table(overdues_by_priority)
         next
-      elsif (m = /^(?<id>\d+)/.match(cmd)) # edit
+      elsif (m = /^(?<pos>\d+)/.match(cmd)) # edit
         loop do
-          r, h = edit_reminder(m[:id])
+          r, h = edit_reminder(m[:pos])
           ap(h)
           r.descr = h.fetch(:descr)
           r.trigger_on = h.fetch(:trigger_on)
@@ -282,6 +287,7 @@ def run_cli
       r = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
       ap(r)
       Reminder.insert(
+        pos: Reminder.next_available_pos,
         descr: r.fetch(:descr),
         trigger_on: r.fetch(:trigger_on),
         priority: r.fetch(:priority),
@@ -294,7 +300,7 @@ def run_notifier!
   loop do
     overdues = overdues_by_priority
     overdues.each do |o|
-      `notify-send -u critical "[#{o.id}] Priority=#{o.priority}: #{o.descr}"`
+      `notify-send -u critical "[#{o.pos}] Priority=#{o.priority}: #{o.descr}"`
     end
     sleep(1)
   end
