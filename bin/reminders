@@ -12,10 +12,8 @@ require 'readline'
 
 # Readline setup START
 COMMANDS = [
-  'all',
-  'overdues',
-  'rm ',
-  'edit ',
+  'ls',
+  'due',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -46,7 +44,7 @@ end.parse!
 
 ap(args)
 
-DB = Sequel.sqlite(File.expand_path('~/.reminders.sqlite'))
+DB = Sequel.sqlite(ENV.fetch('REMINDERS_DB_PATH'))
 DB.logger = Logger.new(STDOUT)
 
 if args.create_db
@@ -147,23 +145,37 @@ def edit_reminder(id)
 end
 
 def run_cli
+  puts "[INFO] type `help` to display usage summary"
   while (line = Readline.readline('> ', true))
     cmd = line.rstrip
     case cmd
-    when 'all'
+    when 'help'
+      puts <<~EOS
+
+      - 123<ENTER>     : edit reminder with ID=123
+      - !123<ENTER>    : delete reminder ID=123
+
+      Commands below are mostly available via tab completion
+
+      - ls             : list reminders by priority first
+      - ls2            : list reminders by trigger timestamp first
+      - due            : list overdue reminders by priority first
+      - due2           : list overdue reminders by trigger timestamp first
+      EOS
+    when 'ls'
       table(all_by_priority)
-    when 'all2'
+    when 'ls2'
       table(all_by_trigger_on)
-    when 'overdues'
+    when 'due'
       table(overdues_by_priority)
-    when 'overdues2'
+    when 'due2'
       table(overdues_by_trigger_on)
     when 'create'
     else
-      if (m = /^rm (?<id>\d+)/.match(cmd))
+      if (m = /^!(?<id>\d+)/.match(cmd))
         Reminder.find(id: m[:id]).delete
         next
-      elsif (m = /^edit (?<id>\d+)/.match(cmd))
+      elsif (m = /^(?<id>\d+)/.match(cmd))
         loop do
           r, h = edit_reminder(m[:id])
           ap(h)
@@ -195,9 +207,9 @@ def run_notifier!
   loop do
     overdues = overdues_by_priority
     overdues.each do |o|
-      `notify-send -u critical "Priority=#{o.priority}: #{o.descr}"`
+      `notify-send -u critical "[#{o.id}] Priority=#{o.priority}: #{o.descr}"`
     end
-    sleep(60)
+    sleep(5)
   end
 end
 
