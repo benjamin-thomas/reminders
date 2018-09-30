@@ -16,6 +16,7 @@ require 'readline'
 COMMANDS = [
   'ls',
   'due',
+  'today',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -110,6 +111,13 @@ def overdues_by_trigger_on
   all_by_trigger_on.where(&OVERDUE_COND)
 end
 
+TODAY_COND = proc do
+  (priority >=0) & (trigger_on < Date.today+1)
+end
+def scheduled_today_by_priority
+  all_by_priority.where(&TODAY_COND)
+end
+
 def ask(attribute, prefill = nil)
   if prefill
     Readline.pre_input_hook = -> {
@@ -168,6 +176,7 @@ def run_cli
       - ls2              : list reminders by trigger timestamp first
       - due              : list overdue reminders by priority first
       - due2             : list overdue reminders by trigger timestamp first
+      - today            : list reminders scheduled for today by timestamp first
       EOS
     when 'ls'
       table(all_by_priority)
@@ -177,6 +186,8 @@ def run_cli
       table(overdues_by_priority)
     when 'due2'
       table(overdues_by_trigger_on)
+    when 'today'
+      table(scheduled_today_by_priority)
     when 'create'
     else
       if (m = /^!(?<id>\d+)/.match(cmd)) # delete
@@ -237,7 +248,7 @@ def run_notifier!
     overdues.each do |o|
       `notify-send -u critical "[#{o.id}] Priority=#{o.priority}: #{o.descr}"`
     end
-    sleep(5)
+    sleep(1)
   end
 end
 
