@@ -178,7 +178,7 @@ def run_cli
 
       - 123<ENTER>       : edit reminder with POS=123
       - !123<ENTER>      : delete reminder POS=123
-      - #123 CODE<ENTER> : reschedule reminder POS=123
+      - >123 CODE<ENTER> : reschedule reminder POS=123
           CODE can be as follows:
             - 10m  : trigger in 10 minutes
             -  3h  : trigger in 3 hours
@@ -244,7 +244,7 @@ def run_cli
         table(overdues_by_priority)
 
         next
-      elsif (m = /^#(?<pos>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
+      elsif (m = /^>(?<pos>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
         now = Time.now
         r = Reminder.find(pos: m[:pos])
 
