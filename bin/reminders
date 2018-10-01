@@ -67,8 +67,6 @@ if args.create_db
              ')
 end
 
-# Reminder = DB[:reminders]
-
 class Reminder < Sequel::Model(DB[:reminders])
   def self.next_available_pos
     i = 0
