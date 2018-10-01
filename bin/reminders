@@ -128,8 +128,13 @@ end
 TODAY_COND = proc do
   (priority >=0) & (trigger_on < Date.today+1)
 end
+
 def scheduled_today_by_priority
   all_by_priority.where(&TODAY_COND)
+end
+
+def scheduled_today_by_trigger_on
+  all_by_trigger_on.where(&TODAY_COND)
 end
 
 def ask(attribute, prefill = nil)
@@ -191,6 +196,7 @@ def run_cli
       - due              : list overdue reminders by priority first
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
+      - today2           : list reminders scheduled for today by priority first
 
       Commands without tab completion (rarely used)
 
@@ -206,6 +212,8 @@ def run_cli
     when 'due2'
       table(overdues_by_trigger_on)
     when 'today'
+      table(scheduled_today_by_trigger_on)
+    when 'today2'
       table(scheduled_today_by_priority)
     when 'export'
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
