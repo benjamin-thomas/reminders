@@ -68,6 +68,11 @@ if args.create_db
 end
 
 class Reminder < Sequel::Model(DB[:reminders])
+
+  def self.prioritized
+    where{ priority >= 0 }
+  end
+
   def self.next_available_pos
     i = 0
     loop do
@@ -129,10 +134,12 @@ TODAY_COND = proc do
   (priority >=0) & (trigger_on < Date.today+1)
 end
 
+# TODO: use Reminder.prioritized and move into model
 def scheduled_today_by_priority
   all_by_priority.where(&TODAY_COND)
 end
 
+# TODO: use Reminder.prioritized and move into model
 def scheduled_today_by_trigger_on
   all_by_trigger_on.where(&TODAY_COND)
 end
@@ -191,8 +198,8 @@ def run_cli
 
       Commands below are mostly available via tab completion
 
-      - ls               : list reminders by trigger timestamp first
-      - ls2              : list reminders by priority first
+      - ls               : list prioritized (triggering) reminders by trigger timestamp first
+      - ls2              : list all reminders by priority first
       - due              : list overdue reminders by priority first
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
@@ -204,7 +211,9 @@ def run_cli
       - import           : restore data from '#{DB_EXPORT_PATH}'
       EOS
     when 'ls'
-      table(all_by_trigger_on)
+      table(
+        Reminder.prioritized.order(*by_trigger_on)
+      )
     when 'ls2'
       table(all_by_priority)
     when 'due'
