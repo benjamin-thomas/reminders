@@ -1,14 +1,58 @@
 #!/usr/bin/env ruby
 
+=begin
+Priorities improvements:
+
+Notify phone every:
+
+prio=2400
+  24 / (2400 / 100) = 1 hour
+  24 / ((2400 / 100) / 60) = 60 minutes
+
+prio=1200
+  24 / (1200 / 100) = 2 hours
+  24 / ((1200 / 100) / 60) = 120 minutes
+
+prio=600
+  24 / (600 / 100) = 4 hours
+  24 / ((600 / 100) / 60) = 240 minutes
+
+prio=300
+  24 / (300 / 100) = 8 hours
+
+prio=200
+  24 / (200 / 100) = 12 hours
+  24 / ((200 / 100) / 60) = 720 minutes
+
+prio=100
+  24 / (100 / 100) = 24 hours
+  24 / ((100 / 100) / 60) = 1440 minutes
+
+prio=4800
+  24 / (4800 / 100) = 0.5 hours
+  24 / ((4800 / 100) / 60) = 30 minutes
+
+prio=72000
+  2400 * 30 = 30 times in an hour, so every 2 minutes
+  24 / ((72000 / 100) / 60) = 2 minutes
+
+prio=144000
+  2400 * 60 = 144000 = 60 times in an hour, so every minute
+  24 / ((144000 / 100) / 60) = 1 minute
+
+
+=end
+
 require 'optparse'
 require 'logger'
 require 'csv'
 
 require 'awesome_print'
 
-ONE_MINUTE = 60
-ONE_HOUR   = ONE_MINUTE * 60
-ONE_DAY    = ONE_HOUR * 24
+ONE_MINUTE = MINUTES = 60
+ONE_HOUR   = HOURS   = 60*MINUTES
+ONE_DAY    = DAYS    = 24*HOURS
+ONE_WEEK   = WEEKS   = 7*DAYS
 
 # https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
 require 'readline'
@@ -18,6 +62,7 @@ COMMANDS = [
   'ls',
   'due',
   'today',
+  'search ',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -53,7 +98,7 @@ DB_DIR = File.dirname(DB_PATH)
 DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
 
 DB = Sequel.sqlite(DB_PATH)
-DB.logger = Logger.new(STDOUT)
+DB.logger = DB_LOGGER = Logger.new(STDOUT)
 
 if args.create_db
   DB.execute('
@@ -62,9 +107,12 @@ if args.create_db
     , pos INTEGER NOT NULL UNIQUE
     , priority INTEGER NOT NULL DEFAULT 0
     , trigger_on DATETIME NULL
+    , phone_notified_on DATETIME NULL
     , descr VARCHAR(255) NOT NULL
   );
              ')
+  p(:CREATE_DB_OK)
+  exit
 end
 
 class Reminder < Sequel::Model(DB[:reminders])
@@ -74,6 +122,7 @@ class Reminder < Sequel::Model(DB[:reminders])
   end
 
   def self.next_available_pos
+    DB.logger = nil
     i = 0
     loop do
       i += 1
@@ -81,11 +130,45 @@ class Reminder < Sequel::Model(DB[:reminders])
         return(i)
       end
     end
+  ensure
+    DB.logger = DB_LOGGER
+  end
+
+  def reschedule(from:, code:)
+    suffix = code[-1]
+    i = Integer(code[0..-2])
+    next_trigger_on = case suffix
+                      when 'm'
+                        from + i*MINUTES
+                      when 'h'
+                        from + i*HOURS
+                      when 'd'
+                        from + i*DAYS
+                      when 'w'
+                        from + i*WEEKS
+                      when 'M'
+                        (from.to_datetime >> 1).to_time
+                      else
+                        fail 'Impossible'
+                      end
+    res = update(trigger_on: next_trigger_on)
+    p(:RESCHEDULE_OK)
+    ap(res)
+  end
+
+  def notify_phone_required?
+    return false if priority < 100
+    return true if phone_notified_on.nil?
+
+    last_notified_since = Integer(Time.now - phone_notified_on)
+    retrigger_after = 24 / (priority/100.0/60.0)
+    return last_notified_since > retrigger_after*MINUTES
   end
 
   def validate
     super
     errors.add(:priority, 'cannot be nil') if priority.nil?
+    errors.add(:priority, 'is too high') if priority && priority > 4800
     errors.add(:descr, 'cannot be empty') if descr.nil? || descr.empty?
     errors.add(:trigger_on, 'cannot be empty on non negative priority') if priority >= 0 && trigger_on.nil?
     errors.add(:trigger_on, 'should be nil on negative priority') if priority < 0 && trigger_on
@@ -93,9 +176,23 @@ class Reminder < Sequel::Model(DB[:reminders])
 end
 
 def table(reminders)
-  rs = reminders.map { |r| r.values.values_at(:pos, :priority, :trigger_on, :descr) }
+  headings = [:pos, :priority, :trigger_on, :descr]
+  rs = reminders.map do |r|
+    #r.values.values_at(*headings)
+    descr = if r.descr.include?(';')
+              r.descr.split(';').first + '[MORE]'
+            else
+              r.descr
+    end
+    [
+      r.pos,
+      r.priority,
+      r.trigger_on&.strftime("%Y-%m-%d %H:%M"),
+      descr,
+    ]
+  end
   table = Terminal::Table.new(
-    headings: [:pos, :priority, :trigger_on, :descr],
+    headings: headings,
     rows: rs,
   )
   puts(table)
@@ -180,6 +277,27 @@ def edit_reminder(pos)
   [r, build_reminder(descr: r.descr, trigger_on: r.trigger_on, priority: r.priority)]
 end
 
+def testdate
+  Readline.completion_proc = proc{}
+  puts "[INFO] type `exit` to exit loop"
+  puts "[INFO] try `next monday at 8pm`"
+  loop do
+    while (line = Readline.readline('testdate> ', true))
+      datestr = line.rstrip
+      return if datestr == 'exit'
+
+      ts = Chronic.parse(datestr)
+      ts2 = IO.popen(['date', '-R', '-d', datestr]) { |f| f.gets&.chomp }
+      ap(
+        default: ts,
+        alt: ts2,
+      )
+    end
+  end
+ensure
+  Readline.completion_proc = COMMANDS_COMP
+end
+
 def run_cli
   puts "[INFO] type `help` to display usage summary"
   while (line = Readline.readline('> ', true))
@@ -189,12 +307,16 @@ def run_cli
       puts <<~EOS
 
       - 123<ENTER>       : edit reminder with POS=123
-      - !123<ENTER>      : delete reminder POS=123
-      - >123 CODE<ENTER> : reschedule reminder POS=123
+      - ! 123<ENTER>      : delete reminder POS=123
+      - >CODE 123<ENTER> : reschedule reminder POS=123
           CODE can be as follows:
             - 10m  : trigger in 10 minutes
             -  3h  : trigger in 3 hours
             -  5d  : trigger in 5 days
+            -  2w  : trigger in 2 weeks
+            -  3M  : trigger in 3 months
+      - +CODE 123<ENTER> : reschedule reminder POS=123, but use last trigger timestamp as reference
+            - 24h  : retrigger at same HH:MM, on the next day
 
       Commands below are mostly available via tab completion
 
@@ -204,16 +326,16 @@ def run_cli
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
       - today2           : list reminders scheduled for today by priority first
+      - search           : list reminders based on descr
 
       Commands without tab completion (rarely used)
 
       - export           : export data to '#{DB_EXPORT_PATH}'
       - import           : restore data from '#{DB_EXPORT_PATH}'
+      - testdate         : datestrings REPL
       EOS
     when 'ls'
-      table(
-        Reminder.prioritized.order(*by_trigger_on)
-      )
+      table(all_by_trigger_on)
     when 'ls2'
       table(all_by_priority)
     when 'due'
@@ -224,6 +346,8 @@ def run_cli
       table(scheduled_today_by_trigger_on)
     when 'today2'
       table(scheduled_today_by_priority)
+    when 'testdate'
+      testdate
     when 'export'
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
         csv << ['priority', 'trigger_on', 'descr' ]
@@ -252,34 +376,27 @@ def run_cli
         )
       end
     else
-      if (m = /^!(?<pos>\d+)/.match(cmd)) # delete
+      if (m = /^! (?<pos>\d+)/.match(cmd)) # delete
         # Don't like log message of query below (generates 2 queries, confusing UI wise)
         DB.logger = nil
-        Reminder.find(pos: m[:pos]).delete
-        DB.logger = Logger.new(STDOUT)
+        r = Reminder.find(pos: m[:pos])
+        r.delete
+        DB.logger = DB_LOGGER
+        ap(r)
         p(:DELETE_OK)
         table(overdues_by_priority)
 
         next
-      elsif (m = /^>(?<pos>\d+)\s(?<code>\d+[mhd])/.match(cmd)) # reschedule
-        now = Time.now
+      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from now
         r = Reminder.find(pos: m[:pos])
+        r.reschedule(from: Time.now, code: m[:code])
 
-        code = m[:code]
-        suffix = code[-1]
-        i = Integer(code[0..-2])
-        next_trigger_on = case suffix
-                          when 'm'
-                            now + i*ONE_MINUTE
-                          when 'h'
-                            now + i*ONE_HOUR
-                          when 'd'
-                            now + i*ONE_DAY
-                          else
-                            fail 'Impossible'
-                          end
-        res = r.update(trigger_on: next_trigger_on)
-        ap(res)
+        table(overdues_by_priority)
+        next
+      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from last trigger timestamp
+        r = Reminder.find(pos: m[:pos])
+        r.reschedule(from: r.trigger_on, code: m[:code])
+
         table(overdues_by_priority)
         next
       elsif (m = /^(?<pos>\d+)/.match(cmd)) # edit
@@ -297,16 +414,32 @@ def run_cli
         end
         table(overdues_by_priority)
         next
+      elsif (m = /^search (?<string>.+\Z)/.match(cmd)) # search
+        table(
+          Reminder.where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
+        )
+        next
       end
 
-      r = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
-      ap(r)
-      Reminder.insert(
-        pos: Reminder.next_available_pos,
-        descr: r.fetch(:descr),
-        trigger_on: r.fetch(:trigger_on),
-        priority: r.fetch(:priority),
-      )
+      # create
+      loop do
+        br = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
+        pos = Reminder.next_available_pos
+        r = Reminder.new(
+          pos: pos,
+          descr: br.fetch(:descr),
+          trigger_on: br.fetch(:trigger_on),
+          priority: br.fetch(:priority),
+        )
+        if r.valid?
+          r.save
+          ap(r)
+          break
+        else
+          p(r.errors)
+        end
+      end
+      p(:CREATE_OK)
     end
   end
 end
@@ -315,7 +448,12 @@ def run_notifier!
   loop do
     overdues = overdues_by_priority
     overdues.each do |o|
-      `notify-send -u critical "[#{o.pos}] Priority=#{o.priority}: #{o.descr}"`
+      notify_msg = "[#{o.pos}] Priority=#{o.priority}: #{o.descr}"
+      system('notify-send', '-u', 'critical', notify_msg)
+      if o.notify_phone_required?
+        system('push_to_phone', notify_msg[0,140]) # TODO: handle max 140 in push_to_phone later
+        o.update(phone_notified_on: Time.now)
+      end
     end
     sleep(1)
   end
