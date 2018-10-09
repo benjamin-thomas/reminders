@@ -63,6 +63,7 @@ COMMANDS = [
   'due',
   'today',
   'search ',
+  'next ',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -116,6 +117,14 @@ if args.create_db
 end
 
 class Reminder < Sequel::Model(DB[:reminders])
+  BY_TRIGGER_ON = [
+    Sequel.lit('CASE WHEN trigger_on IS NULL THEN 1 ELSE 0 END, trigger_on ASC'),
+    Sequel.desc(:priority),
+  ]
+  BY_PRIORITY = [
+    Sequel.desc(:priority),
+    Sequel.asc(:trigger_on),
+  ]
 
   def self.prioritized
     where{ priority >= 0 }
@@ -134,7 +143,7 @@ class Reminder < Sequel::Model(DB[:reminders])
     DB.logger = DB_LOGGER
   end
 
-  def reschedule(from:, code:)
+  def self.compute_code(code:, from:)
     suffix = code[-1]
     i = Integer(code[0..-2])
     next_trigger_on = case suffix
@@ -151,6 +160,17 @@ class Reminder < Sequel::Model(DB[:reminders])
                       else
                         fail 'Impossible'
                       end
+  end
+
+  def self.next(code)
+    from = compute_code(code: code, from: Time.now)
+
+    prioritized
+      .where{ trigger_on < from }
+  end
+
+  def reschedule(from:, code:)
+    next_trigger_on = Reminder.compute_code(code: code, from: from)
     res = update(trigger_on: next_trigger_on)
     p(:RESCHEDULE_OK)
     ap(res)
@@ -327,6 +347,8 @@ def run_cli
       - today            : list reminders scheduled for today by timestamp first
       - today2           : list reminders scheduled for today by priority first
       - search           : list reminders based on descr
+      - next CODE        : list reminders that will trigger in CODE (see above), by trigger_on
+      - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
 
       Commands without tab completion (rarely used)
 
@@ -398,6 +420,16 @@ def run_cli
         r.reschedule(from: r.trigger_on, code: m[:code])
 
         table(overdues_by_priority)
+        next
+      elsif (m = /next (?<code>\d+[mhdwM])/.match(cmd)) # next
+        table(
+          Reminder.next(m[:code]).order(*Reminder::BY_TRIGGER_ON)
+        )
+        next
+      elsif (m = /next2 (?<code>\d+[mhdwM])/.match(cmd)) # next
+        table(
+          Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY)
+        )
         next
       elsif (m = /^(?<pos>\d+)/.match(cmd)) # edit
         loop do
