@@ -7,6 +7,8 @@ class Time
   end
 end
 
+$track_longuest = false
+
 =begin
 Priorities improvements:
 
@@ -71,6 +73,7 @@ COMMANDS = [
   'today',
   'search ',
   'next ',
+  'track_longuest',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -204,13 +207,23 @@ end
 
 def table(reminders)
   headings = [:pos, :priority, :trigger_on, :descr]
+  longuest = {
+    pos: nil,
+    size: 0,
+  }
   rs = reminders.map do |r|
     #r.values.values_at(*headings)
     descr = if r.descr.include?(';')
               r.descr.split(';').first + '[MORE]'
             else
               r.descr
+            end
+
+    if descr.size > longuest.fetch(:size)
+      longuest[:pos] = r.pos
+      longuest[:size] = descr.size
     end
+
     [
       r.pos,
       r.priority,
@@ -233,6 +246,10 @@ def table(reminders)
   else
     puts(table)
     puts "#{cnt} records found"
+  end
+
+  if $track_longuest
+    puts("longuest=#{longuest}")
   end
 end
 
@@ -367,6 +384,7 @@ def run_cli
       - search           : list reminders based on descr
       - next CODE        : list reminders that will trigger in CODE (see above), by trigger_on
       - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
+      - track_longuest   : track_longuest string (fix unreadable output)
 
       Commands without tab completion (rarely used)
 
@@ -388,6 +406,10 @@ def run_cli
       table(scheduled_today_by_priority)
     when 'testdate'
       testdate
+    when 'track_longuest'
+      $track_longuest = !$track_longuest
+      puts($track_longuest ? 'ON' : 'OFF')
+      next
     when 'export'
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
         csv << ['priority', 'trigger_on', 'descr' ]
