@@ -1,5 +1,12 @@
 #!/usr/bin/env ruby
 
+# For awesome_print/console output
+class Time
+  def inspect
+    strftime("%a %d %b %Y, %H:%M")
+  end
+end
+
 =begin
 Priorities improvements:
 
@@ -207,7 +214,7 @@ def table(reminders)
     [
       r.pos,
       r.priority,
-      r.trigger_on&.strftime("%Y-%m-%d %H:%M"),
+      r.trigger_on&.strftime("%Y-%m-%d %H:%M (%a)"),
       descr,
     ]
   end
