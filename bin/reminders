@@ -3,7 +3,7 @@
 # For awesome_print/console output
 class Time
   def inspect
-    strftime("%a %d %b %Y, %H:%M")
+    strftime("%a %d %b %Y, %H:%M [%V]")
   end
 end
 
@@ -214,7 +214,7 @@ def table(reminders)
     [
       r.pos,
       r.priority,
-      r.trigger_on&.strftime("%Y-%m-%d %H:%M (%a)"),
+      r.trigger_on&.strftime("%Y-%m-%d %H:%M (%a) [%V]"),
       descr,
     ]
   end
