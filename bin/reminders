@@ -222,7 +222,18 @@ def table(reminders)
     headings: headings,
     rows: rs,
   )
-  puts(table)
+
+  cnt = rs.count
+  case cnt
+  when 0
+    puts "No records found"
+  when 1
+    puts(table)
+    puts "1 record found"
+  else
+    puts(table)
+    puts "#{cnt} records found"
+  end
 end
 
 def by_priority
