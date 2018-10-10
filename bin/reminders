@@ -166,7 +166,7 @@ class Reminder < Sequel::Model(DB[:reminders])
                       when 'w'
                         from + i*WEEKS
                       when 'M'
-                        (from.to_datetime >> 1).to_time
+                        (from.to_datetime >> i).to_time
                       else
                         fail 'Impossible'
                       end
