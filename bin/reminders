@@ -300,7 +300,7 @@ end
 def testdate
   Readline.completion_proc = proc{}
   puts "[INFO] type `exit` to exit loop"
-  puts "[INFO] try `next monday at 8pm`"
+  puts "[INFO] try `next monday at 8pm`, `2 weeks hence`"
   loop do
     while (line = Readline.readline('testdate> ', true))
       datestr = line.rstrip
