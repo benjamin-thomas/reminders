@@ -126,12 +126,17 @@ if args.create_db
   exit
 end
 
+def remove_desktop_notification
+  # system('xdotool mousemove 1200 40 click 1 mousemove restore')
+  system('xdotool key "ctrl+space"')
+end
+
 class Reminder < Sequel::Model(DB[:reminders])
-  BY_TRIGGER_ON = [
+  BY_TRIGGER_ON_FIRST = [
     Sequel.lit('CASE WHEN trigger_on IS NULL THEN 1 ELSE 0 END, trigger_on ASC'),
     Sequel.desc(:priority),
   ]
-  BY_PRIORITY = [
+  BY_PRIORITY_FIRST = [
     Sequel.desc(:priority),
     Sequel.asc(:trigger_on),
   ]
@@ -448,27 +453,32 @@ def run_cli
         p(:DELETE_OK)
         table(overdues_by_priority)
 
+        remove_desktop_notification
         next
       elsif (m = /^>(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from now
         r = Reminder.find(pos: m[:pos])
         r.reschedule(from: Time.now, code: m[:code])
 
         table(overdues_by_priority)
+
+        remove_desktop_notification
         next
       elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from last trigger timestamp
         r = Reminder.find(pos: m[:pos])
         r.reschedule(from: r.trigger_on, code: m[:code])
 
         table(overdues_by_priority)
+
+        remove_desktop_notification
         next
       elsif (m = /next (?<code>\d+[mhdwM])/.match(cmd)) # next
         table(
-          Reminder.next(m[:code]).order(*Reminder::BY_TRIGGER_ON)
+          Reminder.next(m[:code]).order(*Reminder::BY_TRIGGER_ON_FIRST)
         )
         next
       elsif (m = /next2 (?<code>\d+[mhdwM])/.match(cmd)) # next
         table(
-          Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY)
+          Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY_FIRST)
         )
         next
       elsif (m = /^(?<pos>\d+)/.match(cmd)) # edit
@@ -485,10 +495,14 @@ def run_cli
           ap(r.errors)
         end
         table(overdues_by_priority)
+
+        remove_desktop_notification
         next
       elsif (m = /^search (?<string>.+\Z)/.match(cmd)) # search
         table(
-          Reminder.where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
+          Reminder
+            .where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
+            .order(*Reminder::BY_PRIORITY_FIRST)
         )
         next
       end
@@ -521,6 +535,72 @@ def run_notifier!
     overdues = overdues_by_priority
     overdues.each do |o|
       notify_msg = "[#{o.pos}] Priority=#{o.priority}: #{o.descr}"
+      # use:
+      # NOTIFY_ID=$(dunstify --printid --urgency=critical $NOTIFY_MSG)
+      # dunstify --close=$NOTIFY_ID
+      #
+      # https://developer.gnome.org/notification-spec/
+      # https://unix.stackexchange.com/questions/75386/clearing-modifying-previous-libnotify-notifications
+
+      # cli 0 -> new ID
+      # cli 50 -> reuse notification ID=50
+      # gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify cli 0 audio-card "Message" "Body3" [] {} 0
+
+# gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.Notify cli 21 audio-card "Message" "Body6" [] "{'urgency': <byte 2>}" 0
+
+      # gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.CloseNotification 45
+
+# ./notify-send.sh --print-id -u critical -a shell hello
+# ./notify-send.sh --print-id --replace-id 23 -u critical -a shell
+# 
+# Also check : https://github.com/jefvel/notify-send-improved/blob/master/notify-send
+# https://github.com/nowrep/notify-desktop
+
+#
+# dbus-monitor --session interface='org.freedesktop.Notifications'
+#
+# gem install --user ruby-dbus
+# require 'dbus'
+# sessbus = DBus.session_bus
+# service   = sessbus["org.freedesktop.Notifications"]
+# object    = service["/org/freedesktop/Notifications"]
+# interface    = object["org.freedesktop.Notifications"]
+# interface.methods['Notify']
+# interface.Notify('pry', 0, '', 'summary', 'body2', [], {}, 0)
+#
+=begin
+should be:
+array [
+      dict entry(
+         string "urgency"
+         variant             byte 2
+      )
+   ]
+
+but sends:
+
+array [
+      dict entry(
+         string "urgency"
+         variant             int32 2
+      )
+   ]
+
+=end
+
+# interface.Notify('pry', 0, '', 'summary', 'body2', [], {'urgency' => 2}, 0)
+# interface.Notify('pry', 0, '', 'summary', 'body2', [], {'urgency' => [DBus::Type::BYTE, 2]}, 0)
+# Look for section "Basic types": https://dbus.freedesktop.org/doc/dbus-specification.html
+# interface.Notify('pry', 0, '', 'summary', 'body2', [], {'urgency' => DBus.variant("y", 2)}, 0)
+
+=begin
+To read:
+
+- https://dbus.freedesktop.org/doc/dbus-tutorial.html
+- http://www.linuxembedded.fr/2015/07/comprendre-dbus/
+- https://yoannsculo.developpez.com/tutoriels/linux/introduction-dbus/
+- http://www.kaizou.org/2014/06/dbus-command-line/
+=end
       system('notify-send', '-u', 'critical', notify_msg)
       if o.notify_phone_required?
         system('push_to_phone', notify_msg[0,140]) # TODO: handle max 140 in push_to_phone later
