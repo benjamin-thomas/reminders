@@ -250,7 +250,8 @@ class Reminder < Sequel::Model(DB[:reminders])
     icon = ''
     title = 'Reminder'
     actions = []
-    hints = {'urgency' => DBus.variant(DBUS_ASCII_TYPE_CODE.fetch(:byte), NOTIFY_URGENCY.fetch(:critical))}
+    critical_variant = DBus.variant(DBUS_ASCII_TYPE_CODE.fetch(:byte), NOTIFY_URGENCY.fetch(:critical))
+    hints = {'urgency' => critical_variant }
     timeout = NOTIFY_TIMEOUT.fetch(:never)
     NOTIFICATION_INTERFACE.Notify(
       'reminder',
