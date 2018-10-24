@@ -146,7 +146,6 @@ if args.create_db
   DB.execute('
   CREATE TABLE IF NOT EXISTS reminders (
       id INTEGER PRIMARY KEY AUTOINCREMENT
-    , pos INTEGER NOT NULL UNIQUE
     , priority INTEGER NOT NULL DEFAULT 0
     , trigger_on DATETIME NULL
     , phone_notified_on DATETIME NULL
@@ -174,19 +173,6 @@ class Reminder < Sequel::Model(DB[:reminders])
 
   def self.prioritized
     where{ priority >= 0 }
-  end
-
-  def self.next_available_pos
-    DB.logger = nil
-    i = 0
-    loop do
-      i += 1
-      if find(pos: i).nil?
-        return(i)
-      end
-    end
-  ensure
-    DB.logger = DB_LOGGER
   end
 
   def self.compute_code(code:, from:)
@@ -242,7 +228,7 @@ class Reminder < Sequel::Model(DB[:reminders])
 
   def notify!
     # dbus-monitor --session interface='org.freedesktop.Notifications'
-    notify_msg = "[#{pos}] Priority=#{priority}: #{descr}"
+    notify_msg = "[#{id}] Priority=#{priority}: #{descr}"
     # Inspect args
     # NOTIFICATION_INTERFACE.methods['Notify']
 
@@ -268,9 +254,9 @@ class Reminder < Sequel::Model(DB[:reminders])
 end
 
 def table(reminders)
-  headings = [:pos, :priority, :trigger_on, :descr]
+  headings = [:id, :priority, :trigger_on, :descr]
   longuest = {
-    pos: nil,
+    id: nil,
     size: 0,
   }
   rs = reminders.map do |r|
@@ -282,12 +268,12 @@ def table(reminders)
             end
 
     if descr.size > longuest.fetch(:size)
-      longuest[:pos] = r.pos
+      longuest[:id] = r.id
       longuest[:size] = descr.size
     end
 
     [
-      r.pos,
+      r.id,
       r.priority,
       r.trigger_on&.strftime("%Y-%m-%d %H:%M (%a) [%V]"),
       descr,
@@ -389,8 +375,8 @@ def build_reminder(descr:, trigger_on:, priority:)
   }
 end
 
-def edit_reminder(pos)
-  r = Reminder.first!(pos: pos)
+def edit_reminder(id)
+  r = Reminder.first!(id: id)
   [r, build_reminder(descr: r.descr, trigger_on: r.trigger_on, priority: r.priority)]
 end
 
@@ -423,16 +409,16 @@ def run_cli
     when 'help'
       puts <<~EOS
 
-      - 123<ENTER>       : edit reminder with POS=123
-      - ! 123<ENTER>      : delete reminder POS=123
-      - >CODE 123<ENTER> : reschedule reminder POS=123
+      - 123<ENTER>       : edit reminder with ID=123
+      - ! 123<ENTER>      : delete reminder ID=123
+      - >CODE 123<ENTER> : reschedule reminder ID=123
           CODE can be as follows:
             - 10m  : trigger in 10 minutes
             -  3h  : trigger in 3 hours
             -  5d  : trigger in 5 days
             -  2w  : trigger in 2 weeks
             -  3M  : trigger in 3 months
-      - +CODE 123<ENTER> : reschedule reminder POS=123, but use last trigger timestamp as reference
+      - +CODE 123<ENTER> : reschedule reminder ID=123, but use last trigger timestamp as reference
             - 24h  : retrigger at same HH:MM, on the next day
 
       Commands below are mostly available via tab completion
@@ -489,39 +475,36 @@ def run_cli
         # pip install tabview
         # system('tabview', DB_EXPORT_PATH)
       end
+      puts "Inspect with: 'tabview #{DB_EXPORT_PATH}'"
     when 'import'
       CSV.foreach(DB_EXPORT_PATH, headers: true) do |row|
 
         Reminder.insert(
-          pos: Reminder.next_available_pos,
           descr: row.fetch('descr'),
           trigger_on: row.fetch('trigger_on'),
           priority: row.fetch('priority'),
         )
       end
     else
-      if (m = /^! (?<pos>\d+)/.match(cmd)) # delete
-        # Don't like log message of query below (generates 2 queries, confusing UI wise)
-        DB.logger = nil
-        r = Reminder.find(pos: m[:pos])
+      if (m = /^! (?<id>\d+)/.match(cmd)) # delete
+        r = Reminder.first!(id: m[:id])
         r.delete
-        DB.logger = DB_LOGGER
         ap(r)
         p(:DELETE_OK)
         table(overdues_by_priority)
 
         remove_desktop_notification
         next
-      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from now
-        r = Reminder.find(pos: m[:pos])
+      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from now
+        r = Reminder.first!(id: m[:id])
         r.reschedule(from: Time.now, code: m[:code])
 
         table(overdues_by_priority)
 
         remove_desktop_notification
         next
-      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<pos>\d+)/.match(cmd)) # reschedule from last trigger timestamp
-        r = Reminder.find(pos: m[:pos])
+      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from last trigger timestamp
+        r = Reminder.first!(id: m[:id])
         r.reschedule(from: r.trigger_on, code: m[:code])
 
         table(overdues_by_priority)
@@ -538,9 +521,9 @@ def run_cli
           Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY_FIRST)
         )
         next
-      elsif (m = /^(?<pos>\d+)/.match(cmd)) # edit
+      elsif (m = /^(?<id>\d+)/.match(cmd)) # edit
         loop do
-          r, h = edit_reminder(m[:pos])
+          r, h = edit_reminder(m[:id])
           ap(h)
           r.descr = h.fetch(:descr)
           r.trigger_on = h.fetch(:trigger_on)
@@ -567,9 +550,7 @@ def run_cli
       # create
       loop do
         br = build_reminder(descr: cmd, trigger_on: Time.now + ONE_HOUR, priority: 0)
-        pos = Reminder.next_available_pos
         r = Reminder.new(
-          pos: pos,
           descr: br.fetch(:descr),
           trigger_on: br.fetch(:trigger_on),
           priority: br.fetch(:priority),
