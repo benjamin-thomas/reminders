@@ -156,6 +156,7 @@ def create_db!
     , notification_id INTEGER NULL
     , phone_notified_on DATETIME NULL
     , descr VARCHAR(255) NOT NULL
+    , created_on DATETIME NOT NULL
   );
              ')
   p(:CREATE_DB_OK)
@@ -486,30 +487,27 @@ def run_cli
         FileUtils::Verbose::mv(DB_EXPORT_PATH, bak_path)
       end
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
-        csv << ['priority', 'trigger_on', 'descr' ]
-        Reminder.order(*Reminder::BY_TRIGGER_ON_FIRST).all do |r|
-          csv << [r.priority, r.trigger_on, r.descr]
+        csv << ['priority', 'trigger_on', 'descr', 'created_on']
+        Reminder.order(:created_on).all do |r|
+          csv << [r.priority, r.trigger_on, r.descr, r.created_on]
         end
       end
       p(:OK)
-      print("Inspect export? (y|N)")
-      answer = gets.chomp
-      if answer == 'y'
-        # apt install csvtool
-        puts `csvtool readable "#{DB_EXPORT_PATH}"`
-
-        # pip install tabview
-        # system('tabview', DB_EXPORT_PATH)
-      end
-      puts "Inspect with: 'tabview #{DB_EXPORT_PATH}'"
+      puts "Inspect with:"
+      # pip install tabview
+      puts "tabview #{DB_EXPORT_PATH}"
+      # apt install csvtool
+      puts "csvtool readable #{DB_EXPORT_PATH}"
     when 'import'
-      CSV.foreach(DB_EXPORT_PATH, headers: true) do |row|
-
-        Reminder.insert(
-          descr: row.fetch('descr'),
-          trigger_on: row.fetch('trigger_on'),
-          priority: row.fetch('priority'),
-        )
+      DB.transaction do # I was getting double entries + reimport is *much* quicker
+        CSV.foreach(DB_EXPORT_PATH, headers: true) do |row|
+          Reminder.insert(
+            descr: row.fetch('descr'),
+            trigger_on: row.fetch('trigger_on'),
+            priority: row.fetch('priority'),
+            created_on: row['created_on'],
+          )
+        end
       end
     else
       if (m = /^! (?<id>\d+)/.match(cmd)) # delete
@@ -579,6 +577,7 @@ def run_cli
           descr: br.fetch(:descr),
           trigger_on: br.fetch(:trigger_on),
           priority: br.fetch(:priority),
+          created_on: Time.now,
         )
         if r.valid?
           r.save
