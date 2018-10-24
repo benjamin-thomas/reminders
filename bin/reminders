@@ -245,14 +245,15 @@ class Reminder < Sequel::Model(DB[:reminders])
     # Inspect args
     # NOTIFICATION_INTERFACE.methods['Notify']
 
-    replaces_id = 0
+    do_not_replace = 0
+    replaces_id = notification_id || do_not_replace
     icon = ''
     title = 'Reminder'
     actions = []
     critical_variant = DBus.variant(DBUS_ASCII_TYPE_CODE.fetch(:byte), NOTIFY_URGENCY.fetch(:critical))
     hints = {'urgency' => critical_variant }
     timeout = NOTIFY_TIMEOUT.fetch(:never)
-    NOTIFICATION_INTERFACE.Notify(
+    nid = NOTIFICATION_INTERFACE.Notify(
       'reminder',
       replaces_id,
       icon,
@@ -262,6 +263,14 @@ class Reminder < Sequel::Model(DB[:reminders])
       hints,
       timeout,
     )
+
+    if notification_id != nid  # first notified or notification server has restarted
+      update(notification_id: nid)
+    end
+  end
+
+  def remove_notification!
+    NOTIFICATION_INTERFACE.CloseNotification(notification_id)
   end
 
 end
@@ -506,27 +515,26 @@ def run_cli
       if (m = /^! (?<id>\d+)/.match(cmd)) # delete
         r = Reminder.first!(id: m[:id])
         r.delete
+        r.remove_notification!
         ap(r)
         p(:DELETE_OK)
         table(overdues_by_priority)
 
-        remove_desktop_notification
+
         next
       elsif (m = /^>(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from now
         r = Reminder.first!(id: m[:id])
         r.reschedule(from: Time.now, code: m[:code])
+        r.remove_notification!
 
         table(overdues_by_priority)
-
-        remove_desktop_notification
         next
       elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from last trigger timestamp
         r = Reminder.first!(id: m[:id])
         r.reschedule(from: r.trigger_on, code: m[:code])
+        r.remove_notification!
 
         table(overdues_by_priority)
-
-        remove_desktop_notification
         next
       elsif (m = /next (?<code>\d+[mhdwM])/.match(cmd)) # next
         table(
@@ -547,13 +555,13 @@ def run_cli
           r.priority =  h.fetch(:priority)
           if r.valid?
             r.save
+            r.remove_notification!
             break
           end
           ap(r.errors)
         end
         table(overdues_by_priority)
 
-        remove_desktop_notification
         next
       elsif (m = /^search (?<string>.+\Z)/.match(cmd)) # search
         table(
@@ -586,6 +594,7 @@ def run_cli
 end
 
 def run_notifier!
+  Reminder.dataset.update(notification_id: nil) # start with fresh ids in case of notification restart
   loop do
     overdues = overdues_by_priority
     overdues.each do |o|
