@@ -240,16 +240,20 @@ class Reminder < Sequel::Model(DB[:reminders])
     errors.add(:trigger_on, 'should be nil on negative priority') if priority < 0 && trigger_on
   end
 
+  def notify_msg
+    "[#{id}] Priority=#{priority}: #{descr}"
+  end
+
   def notify!
     # dbus-monitor --session interface='org.freedesktop.Notifications'
-    notify_msg = "[#{id}] Priority=#{priority}: #{descr}"
     # Inspect args
     # NOTIFICATION_INTERFACE.methods['Notify']
 
     do_not_replace = 0
     replaces_id = notification_id || do_not_replace
     icon = ''
-    title = 'Reminder'
+    title = notify_msg
+    body = ''
     actions = []
     critical_variant = DBus.variant(DBUS_ASCII_TYPE_CODE.fetch(:byte), NOTIFY_URGENCY.fetch(:critical))
     hints = {'urgency' => critical_variant }
@@ -259,7 +263,7 @@ class Reminder < Sequel::Model(DB[:reminders])
       replaces_id,
       icon,
       title,
-      notify_msg,
+      body,
       actions,
       hints,
       timeout,
@@ -599,7 +603,7 @@ def run_notifier!
     overdues.each do |o|
       o.notify!
       if o.notify_phone_required?
-        system('push_to_phone', notify_msg[0,140]) # TODO: handle max 140 in push_to_phone later
+        system('push_to_phone', o.notify_msg[0,140]) # TODO: handle max 140 in push_to_phone later
         o.update(phone_notified_on: Time.now)
       end
     end
