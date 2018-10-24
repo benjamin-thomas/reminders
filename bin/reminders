@@ -475,7 +475,7 @@ def run_cli
     when 'export'
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
         csv << ['priority', 'trigger_on', 'descr' ]
-        Reminder.all do |r|
+        Reminder.order(*Reminder::BY_TRIGGER_ON_FIRST).all do |r|
           csv << [r.priority, r.trigger_on, r.descr]
         end
       end
