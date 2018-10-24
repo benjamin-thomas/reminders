@@ -55,6 +55,7 @@ prio=144000
 require 'optparse'
 require 'logger'
 require 'csv'
+require 'fileutils'
 
 require 'awesome_print'
 require 'dbus' # gem install --user ruby-dbus
@@ -118,7 +119,7 @@ require 'sequel'
 require 'terminal-table'
 require 'chronic'
 
-Options = Struct.new(:create_db, :notify)
+Options = Struct.new(:create_db, :recreate_db, :notify)
 args = Options.new
 
 OptionParser.new do |opts|
@@ -126,6 +127,10 @@ OptionParser.new do |opts|
 
   opts.on('--create-db', 'Create database') do
     args.create_db = true
+  end
+
+  opts.on('--recreate-db', 'Recreate database (use after export, then import)') do
+    args.recreate_db = true
   end
 
   opts.on('--notify', 'Warn every minute about overdue reminders with notify-send') do
@@ -142,23 +147,31 @@ DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
 DB = Sequel.sqlite(DB_PATH)
 DB.logger = DB_LOGGER = Logger.new(STDOUT)
 
-if args.create_db
+def create_db!
   DB.execute('
-  CREATE TABLE IF NOT EXISTS reminders (
+  CREATE TABLE reminders (
       id INTEGER PRIMARY KEY AUTOINCREMENT
     , priority INTEGER NOT NULL DEFAULT 0
     , trigger_on DATETIME NULL
+    , notification_id INTEGER NULL
     , phone_notified_on DATETIME NULL
     , descr VARCHAR(255) NOT NULL
   );
              ')
   p(:CREATE_DB_OK)
+end
+
+if args.create_db
+  create_db!
   exit
 end
 
-def remove_desktop_notification
-  # system('xdotool mousemove 1200 40 click 1 mousemove restore')
-  system('xdotool key "ctrl+space"')
+if args.recreate_db
+  if File.exist?(DB_PATH)
+    bak_path = "#{DB_PATH}.bak.#{Time.now.to_i}"
+    FileUtils::Verbose::mv(DB_PATH, bak_path)
+  end
+  system($0, "--create-db") # just in case
 end
 
 class Reminder < Sequel::Model(DB[:reminders])
@@ -459,6 +472,10 @@ def run_cli
       puts($track_longuest ? 'ON' : 'OFF')
       next
     when 'export'
+      if File.exist?(DB_EXPORT_PATH)
+        bak_path = "#{DB_EXPORT_PATH}.bak.#{Time.now.to_i}"
+        FileUtils::Verbose::mv(DB_EXPORT_PATH, bak_path)
+      end
       CSV.open(DB_EXPORT_PATH, 'wb') do |csv|
         csv << ['priority', 'trigger_on', 'descr' ]
         Reminder.order(*Reminder::BY_TRIGGER_ON_FIRST).all do |r|
