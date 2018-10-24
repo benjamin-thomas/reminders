@@ -548,7 +548,7 @@ def run_cli
           Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY_FIRST)
         )
         next
-      elsif (m = /^(?<id>\d+)/.match(cmd)) # edit
+      elsif (m = /^(?<id>\d+)\z/.match(cmd)) # edit
         loop do
           r, h = edit_reminder(m[:id])
           ap(h)
