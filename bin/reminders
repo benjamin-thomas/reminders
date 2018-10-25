@@ -57,8 +57,9 @@ require 'logger'
 require 'csv'
 require 'fileutils'
 
-require 'awesome_print'
 require 'dbus' # gem install --user ruby-dbus
+
+require 'awesome_print'
 =begin
 To read:
 
@@ -118,6 +119,17 @@ Readline.completion_append_character = ''
 require 'sequel'
 require 'terminal-table'
 require 'chronic'
+
+
+def human_sec(sec)
+  fmt = if sec < 3600
+          '%M:%S'
+        else
+          '%H:%M:%S'
+        end
+
+  Time.at(sec).utc.strftime(fmt) # utc is important!
+end
 
 Options = Struct.new(:create_db, :recreate_db, :notify)
 args = Options.new
@@ -249,10 +261,11 @@ class Reminder < Sequel::Model(DB[:reminders])
     # Inspect args
     # NOTIFICATION_INTERFACE.methods['Notify']
 
+    since_sec = Time.now - trigger_on
     do_not_replace = 0
     replaces_id = notification_id || do_not_replace
     icon = ''
-    title = notify_msg
+    title = "#{notify_msg} (#{human_sec(since_sec)})"
     body = ''
     actions = []
     critical_variant = DBus.variant(DBUS_ASCII_TYPE_CODE.fetch(:byte), NOTIFY_URGENCY.fetch(:critical))
