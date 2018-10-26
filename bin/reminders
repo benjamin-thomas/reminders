@@ -234,6 +234,13 @@ class Reminder < Sequel::Model(DB[:reminders])
     ap(res)
   end
 
+  def reschedule2(time_code:)
+    next_trigger_on = ensure_date(time_code)
+    res = update(trigger_on: next_trigger_on)
+    p(:RESCHEDULE2_OK)
+    ap(res)
+  end
+
   def notify_phone_required?
     return false if priority < 100
     return true if phone_notified_on.nil?
@@ -464,6 +471,13 @@ def run_cli
       - +CODE 123<ENTER>     : reschedule reminder ID=123, but use last trigger timestamp as reference
       - +CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
             - 24h : retrigger at same HH:MM, on the next day
+      - @[TIME_CODE] 123<ENTER>     : reschedule reminders ID=123 at TIME_CODE today
+      - @[TIME_CODE] 123 456<ENTER> : reschedule reminders with ID=123, ID=456 at TIME_CODE
+          HOUR can be as follows (use `testdate` below):
+            - 8pm        : trigger at 8pm
+            - 1800       : trigger at 6pm
+            - sat 4pm    : trigger saturday at 4pm
+            - in 1 month
 
       Commands below are mostly available via tab completion
 
@@ -554,6 +568,15 @@ def run_cli
         m[:ids].split.each do |id|
           r = Reminder.first!(id: id)
           r.reschedule(from: r.trigger_on, code: m[:code])
+          r.remove_notification!
+        end
+
+        table(overdues_by_priority)
+        next
+      elsif (m = /@\[(?<time_code>.+)\]\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule with TIME_CODE
+        m[:ids].split.each do |id|
+          r = Reminder.first!(id: id)
+          r.reschedule2(time_code: m[:time_code])
           r.remove_notification!
         end
 
