@@ -231,14 +231,12 @@ class Reminder < Sequel::Model(DB[:reminders])
     next_trigger_on = Reminder.compute_code(code: code, from: from)
     res = update(trigger_on: next_trigger_on)
     p(:RESCHEDULE_OK)
-    ap(res)
   end
 
   def reschedule2(time_code:)
     next_trigger_on = ensure_date(time_code)
     res = update(trigger_on: next_trigger_on)
     p(:RESCHEDULE2_OK)
-    ap(res)
   end
 
   def notify_phone_required?
@@ -289,15 +287,17 @@ class Reminder < Sequel::Model(DB[:reminders])
       timeout,
     )
 
-    if notification_id != nid  # first notified or notification server has restarted
+    if replaces_id != nid  # first notification since notification server has restarted
       update(notification_id: nid)
     end
   end
 
-  def remove_notification!
+  def remove_notification!(delete: false)
+    update(phone_notified_on: nil) unless delete
     return if notification_id.nil?
 
     NOTIFICATION_INTERFACE.CloseNotification(notification_id)
+    update(notification_id: nil) unless delete
   end
 
 end
@@ -548,7 +548,7 @@ def run_cli
       if (m = /^! (?<id>\d+)/.match(cmd)) # delete
         r = Reminder.first!(id: m[:id])
         r.delete
-        r.remove_notification!
+        r.remove_notification!(delete: true)
         ap(r)
         p(:DELETE_OK)
         table(overdues_by_priority)
@@ -560,6 +560,7 @@ def run_cli
           r = Reminder.first!(id: id)
           r.reschedule(from: Time.now, code: m[:code])
           r.remove_notification!
+          ap(r)
         end
 
         table(overdues_by_priority)
@@ -569,6 +570,7 @@ def run_cli
           r = Reminder.first!(id: id)
           r.reschedule(from: r.trigger_on, code: m[:code])
           r.remove_notification!
+          ap(r)
         end
 
         table(overdues_by_priority)
@@ -578,6 +580,7 @@ def run_cli
           r = Reminder.first!(id: id)
           r.reschedule2(time_code: m[:time_code])
           r.remove_notification!
+          ap(r)
         end
 
         table(overdues_by_priority)
@@ -595,13 +598,13 @@ def run_cli
       elsif (m = /^(?<id>\d+)\z/.match(cmd)) # edit
         loop do
           r, h = edit_reminder(m[:id])
-          ap(h)
           r.descr = h.fetch(:descr)
           r.trigger_on = h.fetch(:trigger_on)
           r.priority =  h.fetch(:priority)
           if r.valid?
             r.save
             r.remove_notification!
+            ap(r)
             break
           end
           ap(r.errors)
