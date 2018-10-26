@@ -451,17 +451,19 @@ def run_cli
     when 'help'
       puts <<~EOS
 
-      - 123<ENTER>       : edit reminder with ID=123
-      - ! 123<ENTER>      : delete reminder ID=123
-      - >CODE 123<ENTER> : reschedule reminder ID=123
+      - 123<ENTER>           : edit reminder with ID=123
+      - ! 123<ENTER>         : delete reminder ID=123
+      - >CODE 123<ENTER>     : reschedule reminder ID=123
+      - >CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
           CODE can be as follows:
-            - 10m  : trigger in 10 minutes
-            -  3h  : trigger in 3 hours
-            -  5d  : trigger in 5 days
-            -  2w  : trigger in 2 weeks
-            -  3M  : trigger in 3 months
-      - +CODE 123<ENTER> : reschedule reminder ID=123, but use last trigger timestamp as reference
-            - 24h  : retrigger at same HH:MM, on the next day
+            - 10m : trigger in 10 minutes
+            -  3h : trigger in 3 hours
+            -  5d : trigger in 5 days
+            -  2w : trigger in 2 weeks
+            -  3M : trigger in 3 months
+      - +CODE 123<ENTER>     : reschedule reminder ID=123, but use last trigger timestamp as reference
+      - +CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
+            - 24h : retrigger at same HH:MM, on the next day
 
       Commands below are mostly available via tab completion
 
@@ -539,17 +541,21 @@ def run_cli
 
 
         next
-      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from now
-        r = Reminder.first!(id: m[:id])
-        r.reschedule(from: Time.now, code: m[:code])
-        r.remove_notification!
+      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from now
+        m[:ids].split.each do |id|
+          r = Reminder.first!(id: id)
+          r.reschedule(from: Time.now, code: m[:code])
+          r.remove_notification!
+        end
 
         table(overdues_by_priority)
         next
-      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<id>\d+)/.match(cmd)) # reschedule from last trigger timestamp
-        r = Reminder.first!(id: m[:id])
-        r.reschedule(from: r.trigger_on, code: m[:code])
-        r.remove_notification!
+      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from last trigger timestamp
+        m[:ids].split.each do |id|
+          r = Reminder.first!(id: id)
+          r.reschedule(from: r.trigger_on, code: m[:code])
+          r.remove_notification!
+        end
 
         table(overdues_by_priority)
         next
