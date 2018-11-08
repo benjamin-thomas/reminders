@@ -2,6 +2,7 @@
 
 require 'find'
 require 'logger'
+require 'open3'
 
 logger = Logger.new(STDOUT)
 SLEEP_FOR = 60*60*4
@@ -13,11 +14,12 @@ loop do
     Find.find(tpath) do |path|
       next if !File.file?(path)
 
-      if !system(path)
-        msg = "FAIL: #{File.basename(path)}"
-        # `normal` + --expire-time does not work properly, stay sticky with `critical`
-        system('notify-send', '-u', 'critical', msg)
-      end
+      stdout, stderr, status = Open3.capture3(path)
+      next if status.exitstatus == 0
+
+      msg = "FAIL: #{File.basename(path)} err=#{stderr}"
+      # `normal` + --expire-time does not work properly, stay sticky with `critical`
+      system('notify-send', '-u', 'critical', msg)
 
     end
   end
