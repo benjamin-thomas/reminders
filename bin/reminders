@@ -475,12 +475,19 @@ def run_cli
       - +CODE 123<ENTER>     : reschedule reminder ID=123, but use last trigger timestamp as reference
       - +CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
             - 24h : retrigger at same HH:MM, on the next day
-      - @[TIME_CODE] 123<ENTER>     : reschedule reminders ID=123 at TIME_CODE today
-      - @[TIME_CODE] 123 456<ENTER> : reschedule reminders with ID=123, ID=456 at TIME_CODE
+      - @TIME_CODE ; 123<ENTER>     : reschedule reminders ID=123 at TIME_CODE today (space around `;` is optional)
+      - @TIME_CODE ; 123 456<ENTER> : reschedule reminders with ID=123, ID=456 at TIME_CODE
           HOUR can be as follows (use `testdate` below):
             - 8pm        : trigger at 8pm
             - 1800       : trigger at 6pm
+            - 18         : trigger at 6pm
             - sat 4pm    : trigger saturday at 4pm
+            - sat 1600   : trigger saturday at 4pm
+            - sat 16     : trigger saturday at 4pm
+            - sat 0500   : trigger saturday at 5am
+            - sat 05     : trigger saturday at 5am (removing leading 0 gives random am/pm results)
+            - in 1 week
+            - 1 week hence
             - in 1 month
 
       Commands below are mostly available via tab completion
@@ -579,7 +586,7 @@ def run_cli
 
         table(overdues_by_priority)
         next
-      elsif (m = /@\[(?<time_code>.+)\]\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule with TIME_CODE
+      elsif (m = /@(?<time_code>.+)\s?;\s?(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule with TIME_CODE
         m[:ids].split.each do |id|
           r = Reminder.first!(id: id)
           r.reschedule2(time_code: m[:time_code])
