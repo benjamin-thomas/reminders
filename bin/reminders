@@ -302,7 +302,7 @@ class Reminder < Sequel::Model(DB[:reminders])
 
 end
 
-def table(reminders)
+def table(reminders, show_ids: false)
   headings = [:id, :priority, :trigger_on, :descr]
   longuest = {
     id: nil,
@@ -342,7 +342,11 @@ def table(reminders)
     puts "1 record found"
   else
     puts(table)
-    puts "#{cnt} records found"
+    if show_ids
+      puts "#{cnt} records found: #{reminders.select_map(:id).join(' ')}"
+    else
+      puts "#{cnt} records found"
+    end
   end
 
   if $track_longuest
@@ -616,7 +620,8 @@ def run_cli
         table(
           Reminder
             .where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
-            .order(*Reminder::BY_PRIORITY_FIRST)
+            .order(*Reminder::BY_PRIORITY_FIRST),
+          show_ids: true
         )
         next
       end
