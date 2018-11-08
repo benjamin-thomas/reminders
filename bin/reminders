@@ -56,6 +56,7 @@ require 'optparse'
 require 'logger'
 require 'csv'
 require 'fileutils'
+require 'time' # Time.parse
 
 require 'dbus' # gem install --user ruby-dbus
 
@@ -129,6 +130,11 @@ def human_sec(sec)
         end
 
   Time.at(sec).utc.strftime(fmt) # utc is important!
+end
+
+def parse_date_str(datestr)
+  res = IO.popen(['date', '-R', '-d', datestr]) { |f| f.gets&.chomp }
+  res && Time.parse(res)
 end
 
 Options = Struct.new(:create_db, :recreate_db, :notify)
@@ -234,7 +240,7 @@ class Reminder < Sequel::Model(DB[:reminders])
   end
 
   def reschedule2(time_code:)
-    next_trigger_on = ensure_date(time_code)
+    next_trigger_on = parse_date_str(time_code)
     res = update(trigger_on: next_trigger_on)
     p(:RESCHEDULE2_OK)
   end
@@ -414,16 +420,10 @@ def ask(attribute, prefill = nil)
   res
 end
 
-def ensure_date(val)
-  # return if val.nil?
-  # Date.parse('2018-09-01')
-  Chronic.parse(val)
-end
-
 def build_reminder(descr:, trigger_on:, priority:)
   {
     descr: ask('descr', descr),
-    trigger_on: ensure_date(ask('trigger_on', trigger_on)),
+    trigger_on: parse_date_str(ask('trigger_on', trigger_on)),
     priority: ask('priority', priority),
   }
 end
@@ -436,17 +436,17 @@ end
 def testdate
   Readline.completion_proc = proc{}
   puts "[INFO] type `exit` to exit loop"
-  puts "[INFO] try `next monday at 8pm`, `2 weeks hence`"
+  puts "[INFO] see `help` for valid date strings"
   loop do
     while (line = Readline.readline('testdate> ', true))
       datestr = line.rstrip
       return if datestr == 'exit'
 
       ts = Chronic.parse(datestr)
-      ts2 = IO.popen(['date', '-R', '-d', datestr]) { |f| f.gets&.chomp }
+      ts2 = parse_date_str(datestr)
       ap(
-        default: ts,
-        alt: ts2,
+        chronic: ts,
+        sys: ts2,
       )
     end
   end
@@ -485,10 +485,16 @@ def run_cli
             - sat 1600   : trigger saturday at 4pm
             - sat 16     : trigger saturday at 4pm
             - sat 0500   : trigger saturday at 5am
-            - sat 05     : trigger saturday at 5am (removing leading 0 gives random am/pm results)
-            - in 1 week
-            - 1 week hence
-            - in 1 month
+            - sat 05     : trigger saturday at 5am
+            - sat 5      : trigger saturday at 5am
+            - 2000 1 dec : trigger at 8pm on december 1st
+            - 1 week [hence]
+            - 1 month [hence]
+            - 3 days [hence]
+            - 1 week + 3 days
+            - 6pm + 10 days
+            - 1800 + 10 days
+            - sat 4pm + 1 week
 
       Commands below are mostly available via tab completion
 
