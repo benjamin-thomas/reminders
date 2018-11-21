@@ -334,9 +334,17 @@ def table(reminders, show_ids: false)
       descr,
     ]
   end
+
+  rs2 = []
+  rs.each_with_index do |r, i|
+    rs2 << r
+    if i % 4 == 3 # split every 4 rows, makes targetting IDs visually easier
+      rs2 << :separator
+    end
+  end
   table = Terminal::Table.new(
     headings: headings,
-    rows: rs,
+    rows: rs2,
   )
 
   cnt = rs.count
