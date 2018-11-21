@@ -342,6 +342,9 @@ def table(reminders, show_ids: false)
       rs2 << :separator
     end
   end
+
+  rs2.pop if rs2[-1] == :separator
+
   table = Terminal::Table.new(
     headings: headings,
     rows: rs2,
