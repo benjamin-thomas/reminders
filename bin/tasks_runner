@@ -4,12 +4,15 @@ require 'find'
 require 'logger'
 require 'open3'
 
+MINUTE = MINUTES = 60
+HOUR   = HOURS   = 60 * MINUTES
+
 logger = Logger.new(STDOUT)
-SLEEP_FOR = 60*60*4
+SLEEP_FOR = 4 * HOURS
 
 TASKS_PATH = ENV.fetch('TASKS_PATH')
-loop do
-  logger.info('[START] loop')
+
+def exec_loop
   TASKS_PATH.split(':').each do |tpath|
     Find.find(tpath) do |path|
       next if !File.file?(path)
@@ -23,7 +26,17 @@ loop do
 
     end
   end
+end
 
+loop do
+  logger.info('[START] loop')
+  begin
+  exec_loop
+  rescue => e
+    logger.warn("Something unexpected happened: #{e}")
+    logger.warn("Retrying in 10 minutes")
+    sleep(10 * MINUTES)
+  end
   logger.info("[START] sleep, next run at: #{Time.now + SLEEP_FOR}")
   sleep(SLEEP_FOR)
 end
