@@ -208,6 +208,11 @@ class Reminder < Sequel::Model(DB[:reminders])
   end
 
   def self.compute_code(code:, from:)
+    add_rand_minutes = if code.chomp!('~')
+                         rand(1..59)
+                       else
+                         0
+                       end
     suffix = code[-1]
     i = Integer(code[0..-2])
     next_trigger_on = case suffix
@@ -224,6 +229,8 @@ class Reminder < Sequel::Model(DB[:reminders])
                       else
                         fail 'Impossible'
                       end
+
+    next_trigger_on + (add_rand_minutes*MINUTES)
   end
 
   def self.next(code)
@@ -478,11 +485,12 @@ def run_cli
       - >CODE 123<ENTER>     : reschedule reminder ID=123
       - >CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
           CODE can be as follows:
-            - 10m : trigger in 10 minutes
-            -  3h : trigger in 3 hours
-            -  5d : trigger in 5 days
-            -  2w : trigger in 2 weeks
-            -  3M : trigger in 3 months
+            - 10m  : trigger in 10 minutes
+            -  3h  : trigger in 3 hours
+            -  3h~ : trigger in 3 hours, and add random minutes
+            -  5d  : trigger in 5 days
+            -  2w  : trigger in 2 weeks
+            -  3M  : trigger in 3 months
       - +CODE 123<ENTER>     : reschedule reminder ID=123, but use last trigger timestamp as reference
       - +CODE 123 456<ENTER> : reschedule reminders with ID=123, ID=456
             - 24h : retrigger at same HH:MM, on the next day
@@ -583,7 +591,7 @@ def run_cli
 
 
         next
-      elsif (m = /^>(?<code>\d+[mhdwM])\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from now
+      elsif (m = /^>(?<code>\d+[mhdwM]~?)\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from now
         m[:ids].split.each do |id|
           r = Reminder.first!(id: id)
           r.reschedule(from: Time.now, code: m[:code])
@@ -593,7 +601,7 @@ def run_cli
 
         table(overdues_by_priority)
         next
-      elsif (m = /^\+(?<code>\d+[mhdwM])\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from last trigger timestamp
+      elsif (m = /^\+(?<code>\d+[mhdwM]~?)\s(?<ids>(\d+\s?)+)/.match(cmd)) # reschedule from last trigger timestamp
         m[:ids].split.each do |id|
           r = Reminder.first!(id: id)
           r.reschedule(from: r.trigger_on, code: m[:code])
