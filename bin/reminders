@@ -474,7 +474,18 @@ end
 
 def run_cli
   puts "[INFO] type `help` to display usage summary"
-  while (line = Readline.readline('> ', true))
+  add_hist = false
+  while (line = Readline.readline('> ', add_hist))
+
+    to_push = line.split(' ').first
+    if to_push != line
+      to_push += ' '
+    end
+    last_history_item = Readline::HISTORY[-1] rescue nil
+    if to_push != last_history_item
+      Readline::HISTORY.push(to_push)
+    end
+
     cmd = line.rstrip
     case cmd
     when 'help'
