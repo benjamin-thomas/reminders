@@ -477,10 +477,17 @@ def run_cli
   add_hist = false
   while (line = Readline.readline('> ', add_hist))
 
-    to_push = line.split(' ').first
+    split_char = if line.include?(';')
+                   ';'
+                 else
+                   ' '
+                 end
+    to_push = line.split(split_char).first
     if to_push != line
-      to_push += ' '
+      to_push += split_char
     end
+    to_push += ' ' if to_push.end_with?(';')
+
     last_history_item = Readline::HISTORY[-1] rescue nil
     if to_push != last_history_item
       Readline::HISTORY.push(to_push)
