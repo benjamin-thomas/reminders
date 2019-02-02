@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+INSTALL_DEPENDECIES = "apt-get install ruby-dbus ruby-awesome-print ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic"
+
 # For awesome_print/console output
 class Time
   def inspect
@@ -58,9 +60,18 @@ require 'csv'
 require 'fileutils'
 require 'time' # Time.parse
 
-require 'dbus' # gem install --user ruby-dbus
+begin
+  require 'dbus'
+rescue LoadError
+  abort(INSTALL_DEPENDECIES)
+end
 
-require 'awesome_print'
+begin
+  require 'awesome_print'
+rescue LoadError
+  abort(INSTALL_DEPENDECIES)
+end
+
 =begin
 To read:
 
@@ -115,11 +126,23 @@ Readline.completion_proc = COMMANDS_COMP
 Readline.completion_append_character = ''
 # Readline setup END
 
-# Setup:
-# apt-get install ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic
-require 'sequel'
-require 'terminal-table'
-require 'chronic'
+begin
+  require 'sequel'
+rescue LoadError
+  abort(INSTALL_DEPENDECIES)
+end
+
+begin
+  require 'terminal-table'
+rescue LoadError
+  abort(INSTALL_DEPENDECIES)
+end
+
+begin
+  require 'chronic'
+rescue LoadError
+  abort(INSTALL_DEPENDECIES)
+end
 
 
 def human_sec(sec)
