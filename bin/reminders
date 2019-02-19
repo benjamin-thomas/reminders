@@ -1,6 +1,24 @@
 #!/usr/bin/env ruby
 
-INSTALL_DEPENDECIES = "apt-get install ruby-dbus ruby-awesome-print ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic"
+# Std library
+require 'optparse'
+require 'logger'
+require 'csv'
+require 'fileutils'
+require 'time' # Time.parse
+require 'readline'
+
+# External
+begin
+  require 'dbus'
+  require 'awesome_print'
+  # https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
+  require 'sequel'
+  require 'terminal-table'
+  require 'chronic'
+rescue LoadError
+  abort("apt-get install ruby-dbus ruby-awesome-print ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic")
+end
 
 # For awesome_print/console output
 class Time
@@ -50,27 +68,7 @@ prio=72000
 prio=144000
   2400 * 60 = 144000 = 60 times in an hour, so every minute
   24 / ((144000 / 100) / 60) = 1 minute
-
-
 =end
-
-require 'optparse'
-require 'logger'
-require 'csv'
-require 'fileutils'
-require 'time' # Time.parse
-
-begin
-  require 'dbus'
-rescue LoadError
-  abort(INSTALL_DEPENDECIES)
-end
-
-begin
-  require 'awesome_print'
-rescue LoadError
-  abort(INSTALL_DEPENDECIES)
-end
 
 =begin
 To read:
@@ -108,8 +106,6 @@ ONE_HOUR   = HOURS   = 60*MINUTES
 ONE_DAY    = DAYS    = 24*HOURS
 ONE_WEEK   = WEEKS   = 7*DAYS
 
-# https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
-require 'readline'
 
 # Readline setup START
 COMMANDS = [
@@ -125,25 +121,6 @@ COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 Readline.completion_proc = COMMANDS_COMP
 Readline.completion_append_character = ''
 # Readline setup END
-
-begin
-  require 'sequel'
-rescue LoadError
-  abort(INSTALL_DEPENDECIES)
-end
-
-begin
-  require 'terminal-table'
-rescue LoadError
-  abort(INSTALL_DEPENDECIES)
-end
-
-begin
-  require 'chronic'
-rescue LoadError
-  abort(INSTALL_DEPENDECIES)
-end
-
 
 def human_sec(sec)
   fmt = if sec < 3600
