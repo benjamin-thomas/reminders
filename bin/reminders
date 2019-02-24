@@ -166,6 +166,8 @@ DB_DIR = File.dirname(DB_PATH)
 DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
 
 DB = Sequel.connect(ENV.fetch('DATABASE_URL'))
+db_size_res = DB.fetch('SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size;').first
+ap(db_size_res)
 DB.logger = DB_LOGGER = Logger.new(STDOUT)
 
 def create_db!
