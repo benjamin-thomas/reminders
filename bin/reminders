@@ -10,6 +10,7 @@ require 'readline'
 
 # External
 begin
+  require 'dotenv'
   require 'dbus'
   require 'awesome_print'
   # https://ruby-doc.org/stdlib-2.5.1/libdoc/readline/rdoc/Readline.html
@@ -17,8 +18,10 @@ begin
   require 'terminal-table'
   require 'chronic'
 rescue LoadError
-  abort("apt-get install ruby-dbus ruby-awesome-print ruby-sequel ruby-sqlite3 ruby-terminal-table ruby-chronic")
+  abort("apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic")
 end
+
+Dotenv.load('~/.env/reminders')
 
 # For awesome_print/console output
 class Time
@@ -137,7 +140,7 @@ def parse_date_str(datestr)
   res && Time.parse(res)
 end
 
-Options = Struct.new(:create_db, :recreate_db, :notify)
+Options = Struct.new(:create_db, :destroy_db, :notify)
 args = Options.new
 
 OptionParser.new do |opts|
@@ -147,8 +150,8 @@ OptionParser.new do |opts|
     args.create_db = true
   end
 
-  opts.on('--recreate-db', 'Recreate database (use after export, then import)') do
-    args.recreate_db = true
+  opts.on('--destroy-db', 'Destroy database (use after export, then destroy, then create, then import)') do
+    args.destroy_db = true
   end
 
   opts.on('--notify', 'Warn every minute about overdue reminders with notify-send') do
@@ -162,22 +165,29 @@ DB_PATH = ENV.fetch('REMINDERS_DB_PATH')
 DB_DIR = File.dirname(DB_PATH)
 DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
 
-DB = Sequel.sqlite(DB_PATH)
+DB = Sequel.connect(ENV.fetch('DATABASE_URL'))
 DB.logger = DB_LOGGER = Logger.new(STDOUT)
 
 def create_db!
   DB.execute('
   CREATE TABLE reminders (
-      id INTEGER PRIMARY KEY AUTOINCREMENT
+      id SERIAL PRIMARY KEY
     , priority INTEGER NOT NULL DEFAULT 0
-    , trigger_on DATETIME NULL
+    , trigger_on TIMESTAMP NULL
     , notification_id INTEGER NULL
-    , phone_notified_on DATETIME NULL
-    , descr VARCHAR(255) NOT NULL
-    , created_on DATETIME NOT NULL
+    , phone_notified_on TIMESTAMP NULL
+    , descr TEXT NOT NULL
+    , created_on TIMESTAMP NOT NULL
   );
              ')
   p(:CREATE_DB_OK)
+end
+
+def destroy_db!
+  DB.execute('
+  DROP TABLE reminders;
+             ')
+  p(:DESTROY_DB_OK)
 end
 
 if args.create_db
@@ -185,12 +195,9 @@ if args.create_db
   exit
 end
 
-if args.recreate_db
-  if File.exist?(DB_PATH)
-    bak_path = "#{DB_PATH}.bak.#{Time.now.to_i}"
-    FileUtils::Verbose::mv(DB_PATH, bak_path)
-  end
-  system($0, "--create-db") # just in case
+if args.destroy_db
+  destroy_db!
+  exit
 end
 
 class Reminder < Sequel::Model(DB[:reminders])
