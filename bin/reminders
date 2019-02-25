@@ -18,7 +18,14 @@ begin
   require 'terminal-table'
   require 'chronic'
 rescue LoadError
-  abort("apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic")
+  abort("
+    # Note: ruby-pg is buggy/unusable in Ubuntu 18.04
+    apt remove ruby-pg
+    apt-get install ruby-dev libpq-dev
+    gem install --user pg
+
+    apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic
+        ")
 end
 
 Dotenv.load('~/.env/reminders')
