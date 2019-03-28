@@ -125,6 +125,10 @@ COMMANDS = [
   'search ',
   'next ',
   'track_longuest',
+  'export',
+  'import',
+  'testdate',
+  'push_back',
 ]
 COMMANDS_COMP = proc { |s| COMMANDS.grep(/^#{Regexp.escape(s)}/) }
 
@@ -562,12 +566,39 @@ def run_cli
       - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
       - track_longuest   : track_longuest string (fix unreadable output)
 
-      Commands without tab completion (rarely used)
-
       - export           : export data to '#{DB_EXPORT_PATH}'
       - import           : restore data from '#{DB_EXPORT_PATH}'
       - testdate         : datestrings REPL
+      - push_back         : enter pushback mode (handle multiple overdues)
       EOS
+    when 'push_back'
+      overdues_by_priority.each do |r|
+        ap(r)
+        add_hist = true
+        push_back_code = Readline.readline('PUSH_BACK> ', add_hist)
+        break if push_back_code == '!!!'
+        case push_back_code[0]
+        when '!'
+          r.delete
+          r.remove_notification!(delete: true)
+          next
+        when '+'
+          r.reschedule(from: r.trigger_on, code: push_back_code[1..-1])
+        when '@'
+          r.reschedule2(time_code: push_back_code[1..-1])
+        when '>'
+          r.reschedule(from: Time.now, code: push_back_code[1..-1])
+        else
+          r.reschedule(from: Time.now, code: push_back_code)
+        end
+        ap(r.trigger_on)
+        r.remove_notification!
+        if r.trigger_on < Time.now
+          abort('Stop pushing back in the past!')
+        elsif r.trigger_on < Time.now + 60*30
+          abort('push back at least more than 30 minutes!')
+        end
+      end
     when 'ls'
       table(all_by_trigger_on)
     when 'ls2'
