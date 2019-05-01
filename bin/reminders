@@ -17,6 +17,7 @@ begin
   require 'sequel'
   require 'terminal-table'
   require 'chronic'
+  require 'colored'
 rescue LoadError
   abort("
     # Note: ruby-pg is buggy/unusable in Ubuntu 18.04
@@ -24,7 +25,7 @@ rescue LoadError
     apt-get install ruby-dev libpq-dev
     gem install --user pg
 
-    apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic
+    apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic ruby-colored
         ")
 end
 
@@ -123,6 +124,7 @@ COMMANDS = [
   'due',
   'today',
   'search ',
+  'searchd ',
   'next ',
   'track_longuest',
   'export',
@@ -176,10 +178,18 @@ DB_PATH = ENV.fetch('REMINDERS_DB_PATH')
 DB_DIR = File.dirname(DB_PATH)
 DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
 
-DB = Sequel.connect(ENV.fetch('DATABASE_URL'))
+# https://sequel.jeremyevans.net/rdoc/files/doc/opening_databases_rdoc.html
+DB = Sequel.connect(ENV.fetch('DATABASE_URL'), connect_timeout: 10)
 db_size_res = DB.fetch('SELECT pg_size_pretty(pg_database_size(current_database())) AS db_size;').first
 ap(db_size_res)
 DB.logger = DB_LOGGER = Logger.new(STDOUT)
+
+# See if connection is stable after long sleep/wake cycle
+DB.extension(:connection_validator)
+DB.pool.connection_validation_timeout = 5 # default is 3600s (every hour), -1 to validate every connections
+
+# DB.extension(:connection_expiration)
+# DB.pool.connection_expiration_timeout = 60*5 # Default is 3600 # 1 hour
 
 def create_db!
   DB.execute('
@@ -562,6 +572,7 @@ def run_cli
       - today            : list reminders scheduled for today by timestamp first
       - today2           : list reminders scheduled for today by priority first
       - search           : list reminders based on descr
+      - searchd          : list due reminders based on descr
       - next CODE        : list reminders that will trigger in CODE (see above), by trigger_on
       - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
       - track_longuest   : track_longuest string (fix unreadable output)
@@ -584,19 +595,23 @@ def run_cli
           next
         when '+'
           r.reschedule(from: r.trigger_on, code: push_back_code[1..-1])
-        when '@'
-          r.reschedule2(time_code: push_back_code[1..-1])
         when '>'
           r.reschedule(from: Time.now, code: push_back_code[1..-1])
+        when '@'
+          r.reschedule2(time_code: push_back_code[1..-1])
         else
-          r.reschedule(from: Time.now, code: push_back_code)
+          r.reschedule2(time_code: push_back_code)
         end
         ap(r.trigger_on)
         r.remove_notification!
         if r.trigger_on < Time.now
-          abort('Stop pushing back in the past!')
+          3.times do
+            warn('STOP PUSHING BACK IN THE PAST!')
+          end
         elsif r.trigger_on < Time.now + 60*30
-          abort('push back at least more than 30 minutes!')
+          3.times do
+            warn('PUSHED BACK LESS THAN 1 HOUR, DID YOU MEAN IT?'.yellow.bold)
+          end
         end
       end
     when 'ls'
@@ -718,6 +733,14 @@ def run_cli
           Reminder
             .where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
             .order(*Reminder::BY_PRIORITY_FIRST),
+          show_ids: true
+        )
+        next
+      elsif (m = /^searchd (?<string>.+\Z)/.match(cmd)) # search due
+        rems = overdues_by_priority
+          .where(Sequel.ilike(:descr, "%" + m[:string] + "%"))
+        table(
+          rems,
           show_ids: true
         )
         next
