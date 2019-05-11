@@ -583,10 +583,15 @@ def run_cli
       - push_back         : enter pushback mode (handle multiple overdues)
       EOS
     when 'push_back'
+      Readline::HISTORY.clear
       overdues_by_priority.each do |r|
         ap(r)
-        add_hist = true
+        add_hist = false
         push_back_code = Readline.readline('PUSH_BACK> ', add_hist)
+        last_history_item = Readline::HISTORY[-1] rescue nil
+        if push_back_code != last_history_item
+          Readline::HISTORY.push(push_back_code)
+        end
         break if push_back_code == '!!!'
         case push_back_code[0]
         when '!'
@@ -606,7 +611,7 @@ def run_cli
         r.remove_notification!
         if r.trigger_on < Time.now
           3.times do
-            warn('STOP PUSHING BACK IN THE PAST!')
+            warn('STOP PUSHING BACK IN THE PAST!'.red.bold)
           end
         elsif r.trigger_on < Time.now + 60*30
           3.times do
