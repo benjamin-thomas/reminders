@@ -507,6 +507,8 @@ def run_cli
   puts "[INFO] type `help` to display usage summary"
   add_hist = false
   while (line = Readline.readline('> ', add_hist))
+    next if line.empty? # Ignore empty returns
+    exit if line == '!!!'
 
     split_char = if line.include?(';')
                    ';'
@@ -529,6 +531,7 @@ def run_cli
     when 'help'
       puts <<~EOS
 
+      - !!!                  : exit main mode, or push_back mode
       - 123<ENTER>           : edit reminder with ID=123
       - ! 123<ENTER>         : delete reminder ID=123
       - >CODE 123<ENTER>     : reschedule reminder ID=123
@@ -581,7 +584,7 @@ def run_cli
       - export           : export data to '#{DB_EXPORT_PATH}'
       - import           : restore data from '#{DB_EXPORT_PATH}'
       - testdate         : datestrings REPL
-      - push_back         : enter pushback mode (handle multiple overdues)
+      - push_back        : enter pushback mode (handle multiple overdues, exit with !!!)
       EOS
     when 'push_back'
       Readline::HISTORY.clear
