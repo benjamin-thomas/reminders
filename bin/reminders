@@ -507,7 +507,7 @@ def run_cli
   puts "[INFO] type `help` to display usage summary"
   add_hist = false
   while (line = Readline.readline('> ', add_hist))
-    next if line.empty? # Ignore empty returns
+    next if line.nil? || line.empty? # Ignore empty returns
     exit if line == '!!!'
 
     split_char = if line.include?(';')
@@ -531,7 +531,7 @@ def run_cli
     when 'help'
       puts <<~EOS
 
-      - !!!                  : exit main mode, or push_back mode
+      - !!!                  : exit main mode, or push_back mode (or use <C-D> in main mode)
       - 123<ENTER>           : edit reminder with ID=123
       - ! 123<ENTER>         : delete reminder ID=123
       - >CODE 123<ENTER>     : reschedule reminder ID=123
@@ -588,10 +588,12 @@ def run_cli
       EOS
     when 'push_back'
       Readline::HISTORY.clear
+      cnt = overdues_by_priority.count
       overdues_by_priority.each do |r|
         ap(r)
         add_hist = false
-        push_back_code = Readline.readline('PUSH_BACK> ', add_hist)
+        push_back_code = Readline.readline("PUSH_BACK[#{cnt}]> ", add_hist)
+        cnt -= 1
         last_history_item = Readline::HISTORY[-1] rescue nil
         if push_back_code != last_history_item
           Readline::HISTORY.push(push_back_code)
@@ -788,8 +790,14 @@ def run_notifier!
         o.update(phone_notified_on: Time.now)
       end
     end
-    sleep(1)
+    sleep(ONE_MINUTE)
   end
+rescue => e
+  # Connection lost, or else
+  DB_LOGGER.warn("Rescuing from error : #{e}")
+  DB_LOGGER.warn("Will retry in 1m.")
+  sleep(60)
+  retry
 end
 
 if args.notify
