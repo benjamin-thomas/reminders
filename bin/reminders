@@ -126,6 +126,7 @@ COMMANDS = [
   'search ',
   'searchd ',
   'next ',
+  'upto ',
   'track_longuest',
   'export',
   'import',
@@ -268,7 +269,13 @@ class Reminder < Sequel::Model(DB[:reminders])
     from = compute_code(code: code, from: Time.now)
 
     prioritized
-      .where{ trigger_on < from }
+      .where{ trigger_on <= from }
+  end
+
+  def self.upto(time_code)
+    ts = parse_date_str(time_code)
+    prioritized
+      .where{ trigger_on <= ts }
   end
 
   def reschedule(from:, code:)
@@ -520,6 +527,8 @@ def run_cli
       'next2',
       'search',
       'search2',
+      'upto',
+      'upto2',
     ]
     to_push = if line.start_with?(*cmd_header_keep_whole_history)
                 line
@@ -589,6 +598,8 @@ def run_cli
       - searchd DESCR    : list due reminders based on descr
       - next CODE        : list reminders that will trigger in CODE (see above), by trigger_on
       - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
+      - upto TIME_CODE   : list reminders that will trigger upto TIME_CODE (see above), by trigger_on
+      - upto2 TIME_CODE  : list reminders that will trigger upto TIME_CODE (see above), by priority
       - track_longuest   : track_longuest string (fix unreadable output)
 
       - export           : export data to '#{DB_EXPORT_PATH}'
@@ -727,9 +738,19 @@ def run_cli
           Reminder.next(m[:code]).order(*Reminder::BY_TRIGGER_ON_FIRST)
         )
         next
-      elsif (m = /next2 (?<code>\d+[mhdwM])/.match(cmd)) # next
+      elsif (m = /next2 (?<code>\d+[mhdwM])/.match(cmd)) # next2
         table(
           Reminder.next(m[:code]).order(*Reminder::BY_PRIORITY_FIRST)
+        )
+        next
+      elsif (m = /upto (?<time_code>.+)/.match(cmd)) # upto
+        table(
+          Reminder.upto(m[:time_code]).order(*Reminder::BY_TRIGGER_ON_FIRST)
+        )
+        next
+      elsif (m = /upto2 (?<time_code>.+)/.match(cmd)) # upto2
+        table(
+          Reminder.upto(m[:time_code]).order(*Reminder::BY_PRIORITY_FIRST)
         )
         next
       elsif (m = /^(?<id>\d+)\z/.match(cmd)) # edit
