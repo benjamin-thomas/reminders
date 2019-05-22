@@ -515,7 +515,17 @@ def run_cli
                  else
                    ' '
                  end
-    to_push = line.split(split_char).first
+    cmd_header_keep_whole_history = [
+      'next',
+      'next2',
+      'search',
+      'search2',
+    ]
+    to_push = if line.start_with?(*cmd_header_keep_whole_history)
+                line
+              else
+                line.split(split_char).first
+              end
     if to_push != line
       to_push += split_char
     end
@@ -575,8 +585,8 @@ def run_cli
       - due2             : list overdue reminders by trigger timestamp first
       - today            : list reminders scheduled for today by timestamp first
       - today2           : list reminders scheduled for today by priority first
-      - search           : list reminders based on descr
-      - searchd          : list due reminders based on descr
+      - search DESCR     : list reminders based on descr
+      - searchd DESCR    : list due reminders based on descr
       - next CODE        : list reminders that will trigger in CODE (see above), by trigger_on
       - next2 CODE       : list reminders that will trigger in CODE (see above), by priority
       - track_longuest   : track_longuest string (fix unreadable output)
@@ -790,7 +800,7 @@ def run_notifier!
         o.update(phone_notified_on: Time.now)
       end
     end
-    sleep(ONE_MINUTE)
+    sleep(ONE_MINUTE*5)
   end
 rescue => e
   # Connection lost, or else
