@@ -150,6 +150,8 @@ def human_sec(sec)
 end
 
 def parse_date_str(datestr)
+  return if datestr.nil?
+
   res = IO.popen(['date', '-R', '-d', datestr]) { |f| f.gets&.chomp }
   res && Time.parse(res)
 end
@@ -275,7 +277,7 @@ class Reminder < Sequel::Model(DB[:reminders])
   def self.upto(time_code)
     ts = parse_date_str(time_code)
     prioritized
-      .where{ trigger_on <= ts }
+      .where{ trigger_on < ts }
   end
 
   def reschedule(from:, code:)
