@@ -7,7 +7,7 @@ require 'open3'
 MINUTE = MINUTES = 60
 HOUR   = HOURS   = 60 * MINUTES
 
-logger = Logger.new(STDOUT)
+$logger = Logger.new(STDOUT)
 SLEEP_FOR = 4 * HOURS
 
 TASKS_PATH = ENV.fetch('TASKS_PATH')
@@ -16,9 +16,23 @@ def exec_loop
   TASKS_PATH.split(':').each do |tpath|
     Find.find(tpath) do |path|
       next if !File.file?(path)
+      next if path.end_with?('.off')
 
-      stdout, stderr, status = Open3.capture3(path)
-      next if status.exitstatus == 0
+      envdir_path = path.sub('/bin/', '/.envdir/')
+      do_debug = ENV['DEBUG'] == '1'
+      if File.exist?(envdir_path)
+        $logger.info("[RUN] envdir #{envdir_path} #{path}") if do_debug
+        stdout, stderr, status = Open3.capture3('envdir', envdir_path, path)
+      else
+        $logger.info("[RUN] #{path}") if do_debug
+        stdout, stderr, status = Open3.capture3(path)
+      end
+      if status.exitstatus == 0
+        $logger.info("[SUCESS] #{File.basename(path)}") if do_debug
+        puts(stdout)
+        warn(stderr)
+        next
+      end
 
       msg = "FAIL: #{File.basename(path)} err=#{stderr}"
       # `normal` + --expire-time does not work properly, stay sticky with `critical`
@@ -29,14 +43,14 @@ def exec_loop
 end
 
 loop do
-  logger.info('[START] loop')
+  $logger.info('[START] loop')
   begin
   exec_loop
   rescue => e
-    logger.warn("Something unexpected happened: #{e}")
-    logger.warn("Retrying in 10 minutes")
+    $logger.warn("Something unexpected happened: #{e}")
+    $logger.warn("Retrying in 10 minutes")
     sleep(10 * MINUTES)
   end
-  logger.info("[START] sleep, next run at: #{Time.now + SLEEP_FOR}")
+  $logger.info("[START] sleep, next run at: #{Time.now + SLEEP_FOR}")
   sleep(SLEEP_FOR)
 end
