@@ -314,11 +314,8 @@ class Reminder < Sequel::Model(DB[:reminders])
     abort('Bad bday tag: could not extract bdate_str') if bdate_str.nil?
 
     bdate = Date.parse(bdate_str)
-    today = Date.today
-    next_bday = Date.new(today.year, bdate.month, bdate.day)
-    if today > next_bday
-      next_bday = next_bday >> 12
-    end
+    ref_date = trigger_on.to_date
+    next_bday = Date.new(ref_date.year, bdate.month, bdate.day)
     age = next_bday.year - bdate.year
     self.descr = "bday[#{name}, #{bdate_str}] : #{age} years old on #{next_bday.strftime("%d %B %Y (%A)")}"
   end
@@ -574,7 +571,7 @@ def run_cli
     to_push += ' ' if to_push.end_with?(';')
 
     last_history_item = Readline::HISTORY[-1] rescue nil
-    if to_push != last_history_item
+    if to_push != last_history_item && to_push != '!'
       Readline::HISTORY.push(to_push)
     end
 
@@ -639,7 +636,7 @@ def run_cli
       - import           : restore data from '#{DB_EXPORT_PATH}'
       - testdate         : datestrings REPL
       - push_back        : enter pushback mode (handle multiple overdues, exit with !!!)
-      - bday[NAME, BDT]  : special tag, will compute and add trailing data
+      - bday[NAME, BDATE]: special tag, will compute and add trailing data
       EOS
     when 'push_back'
       Readline::HISTORY.clear
