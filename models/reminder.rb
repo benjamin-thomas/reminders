@@ -65,6 +65,11 @@ class Reminder < Sequel::Model(DB[:reminders])
     p(:RESCHEDULE2_OK)
   end
 
+  def reschedule!(ts)
+    update(trigger_on: ts)
+    autofill!
+  end
+
   def autofill!
     if descr.start_with?('bday[')
       autofill_bday!

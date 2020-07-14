@@ -1,0 +1,33 @@
+<form action="/reschedule/<%= r.id %>" method="POST">
+  <label for="reschedule_on">Reschedule on</label>
+  <span id="next-standby-on-weekday"></span>
+  <input type="datetime-local" id="reschedule_on" name="reschedule_on">
+
+  <div id="update-standby-date-section" style="margin-top: 30px">
+
+    <% [:months, :weeks, :days, :hours, :minutes].each do |id| %>
+      <label for="<%= id %>"><%= id %></label>
+      <input type="number" id="<%= id %>" name="<%= id %>" style="max-width: 70px;">
+
+    <% end %>
+
+    <input type="submit" value="Push back" id="push-back">
+
+    <div style="margin-top: 30px">
+      <div style="margin-left: 10px;">
+        <span id="next-at">
+          <a href="#" class="btn btn-default" data-hour="9">+1j @9h</a>
+          <a href="#" class="btn btn-default" data-hour="14">+1j @14h</a>
+          <a href="#" class="btn btn-default" data-hour="rand">+1j @aléat.</a>
+        </span>
+        <span id="today-at-random" style="margin-left: 30px;">
+          <a href="#" class="btn btn-default">Ce jour @aléat.</a>
+        </span>
+        <span id="today-at-end-of-day">
+          <a href="#" class="btn btn-default">Ce jour @fin.</a>
+        </span>
+      </div>
+    </div>
+  </div>
+
+</form>

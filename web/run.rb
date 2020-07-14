@@ -72,7 +72,26 @@ def time_ago(time)
 end
 
 get '/' do
-  redirect '/overdues'
+  redirect '/next'
+end
+
+get '/next' do
+  reminder = Reminder.by_priority.overdue.first
+  redirect "/reminders/#{reminder.id}"
+end
+
+get '/reminders/:id' do
+  reminder = Reminder.first!(id: params[:id])
+  herb :reminder, locals: {
+    r: reminder,
+  }
+end
+
+post '/reschedule/:id' do
+  r = Reminder.first!(id: params[:id])
+  r.reschedule!(params[:reschedule_on])
+  # redirect "/reminders/#{r.id}"
+  redirect '/next'
 end
 
 get '/overdues' do
