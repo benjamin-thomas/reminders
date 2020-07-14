@@ -77,13 +77,18 @@ end
 
 get '/next' do
   reminder = Reminder.by_priority.overdue.first
+  if reminder.nil?
+    return redirect '/overdues'
+  end
   redirect "/reminders/#{reminder.id}"
 end
 
 get '/reminders/:id' do
   reminder = Reminder.first!(id: params[:id])
+  overdue_cnt = Reminder.by_priority.overdue.count
   herb :reminder, locals: {
     r: reminder,
+    overdue_cnt: overdue_cnt,
   }
 end
 
