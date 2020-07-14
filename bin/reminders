@@ -30,7 +30,7 @@ rescue LoadError
 end
 
 Dotenv.load('~/.env/reminders')
-load './config/database.rb'
+load File.expand_path(File.join(__dir__, '../config/database.rb'))
 require_relative '../models/reminder'
 
 # For awesome_print/console output

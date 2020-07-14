@@ -134,9 +134,48 @@
         $pushBack.click();
     }
 
+    function nextWeekDay(wday, hour, e) {
+        e.preventDefault();
+
+        if (moment().day() >= wday) {
+          wday += 7;
+        }
+        moment().day(wday).toDate()
+
+        let mo = moment().day(wday); // mon=1, sun=7
+        mo.set({
+          hour: hour,
+          minute:0,
+          second:0,
+          millisecond:0,
+        })
+
+        standbyDate.value = mo.format("YYYY-MM-DDTHH:mm");
+        standbyDate.focus();
+        $pushBack.click();
+    }
+
     updateStandbyDateSection.addEventListener('change', updateStandbyDate, false);
     document.getElementById('next-at').addEventListener('click', nextAt, false);
+
     document.getElementById('today-at-random').addEventListener('click', todayAtRandom, false);
     document.getElementById('today-at-end-of-day').addEventListener('click', todayAtEndOfDay, false);
+
+    document.getElementById('next-monday-start').addEventListener('click', nextWeekDay.bind(this, 1, 0), false);
+    document.getElementById('next-tuesday-start').addEventListener('click', nextWeekDay.bind(this, 2, 0), false);
+    document.getElementById('next-wednesday-start').addEventListener('click', nextWeekDay.bind(this, 3, 0), false);
+    document.getElementById('next-thursday-start').addEventListener('click', nextWeekDay.bind(this, 4, 0), false);
+    document.getElementById('next-friday-start').addEventListener('click', nextWeekDay.bind(this, 5, 0), false);
+    document.getElementById('next-saturday-start').addEventListener('click', nextWeekDay.bind(this, 6, 0), false);
+    document.getElementById('next-sunday-start').addEventListener('click', nextWeekDay.bind(this, 7, 0), false);
+
+    document.getElementById('next-monday-end').addEventListener('click', nextWeekDay.bind(this, 1, 20), false);
+    document.getElementById('next-tuesday-end').addEventListener('click', nextWeekDay.bind(this, 2, 20), false);
+    document.getElementById('next-wednesday-end').addEventListener('click', nextWeekDay.bind(this, 3, 20), false);
+    document.getElementById('next-thursday-end').addEventListener('click', nextWeekDay.bind(this, 4, 20), false);
+    document.getElementById('next-friday-end').addEventListener('click', nextWeekDay.bind(this, 5, 20), false);
+    document.getElementById('next-saturday-end').addEventListener('click', nextWeekDay.bind(this, 6, 20), false);
+    document.getElementById('next-sunday-end').addEventListener('click', nextWeekDay.bind(this, 7, 20), false);
+
     updateStandbyDate();
 })();

@@ -15,17 +15,37 @@
 
     <div style="margin-top: 30px">
       <div style="margin-left: 10px;">
+
         <span id="next-at">
           <a href="#" class="btn btn-default" data-hour="9">+1j @9h</a>
           <a href="#" class="btn btn-default" data-hour="14">+1j @14h</a>
           <a href="#" class="btn btn-default" data-hour="rand">+1j @aléat.</a>
         </span>
+
         <span id="today-at-random" style="margin-left: 30px;">
           <a href="#" class="btn btn-default">Ce jour @aléat.</a>
         </span>
+
         <span id="today-at-end-of-day">
           <a href="#" class="btn btn-default">Ce jour @fin.</a>
         </span>
+
+        <hr style="margin: 20px 0">
+        <h3 style="display: inline">Week day start:</h3>
+        <% [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday].each do |week_day| %>
+          <span id="next-<%= week_day %>-start">
+            <a href="#">@<%= week_day %></a>
+          </span>
+        <% end %>
+
+        <br>
+        <h3 style="display: inline">Week day end:</h3>
+        <% [:monday, :tuesday, :wednesday, :thursday, :friday, :saturday, :sunday].each do |week_day| %>
+          <span id="next-<%= week_day %>-end">
+            <a href="#">@<%= week_day %></a>
+          </span>
+        <% end %>
+
       </div>
     </div>
   </div>
