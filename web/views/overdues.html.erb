@@ -1,0 +1,37 @@
+<h1>Overdue reminders</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>CNT</th>
+      <th>ID</th>
+      <th>Priority</th>
+      <th>Trigger on</th>
+      <th>Descr</th>
+      <th>Extra?</th>
+    </tr>
+  </thead>
+
+  <tbody>
+
+    <% overdues.each_with_index do |r, i| %>
+      <tr>
+        <td><%= i + 1 %></td>
+        <td><%= r.id %></td>
+        <td><%= r.priority %></td>
+        <td><%= time_ago r.trigger_on %></td>
+
+        <% short_descr, extra_descr = r.descr.split(';') %>
+        <td><%= short_descr %></td>
+        <td class="reminder-descr" title="<%= extra_descr %>">
+          <% if extra_descr %>
+            YES
+          <% end %>
+        </td>
+      <% end %>
+      </tr>
+
+  </tbody>
+</table>
+
+<script src="js/overdue.js"></script>
