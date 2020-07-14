@@ -57,30 +57,33 @@ ONE_WEEK   = ONE_DAY    * 7
 
 def time_ago(time)
   diff = Time.now - time
-  case diff
+  case diff.abs
   when 0...ONE_MINUTE
-    '< 1m ago'
+    '< 1m'
   when ONE_MINUTE...ONE_HOUR
-    '< 1h ago'
+    '< 1h'
+  when ONE_HOUR...(ONE_HOUR * 2)
+    '< 2h'
+  when (ONE_HOUR * 2)...(ONE_HOUR * 3)
+    '< 3h'
+  when (ONE_HOUR * 3)...(ONE_HOUR * 4)
+    '< 4h'
   when ONE_HOUR...ONE_DAY
     'today'
   when ONE_DAY...ONE_WEEK
     'this week'
   else
-    'a while ago'
+    '> 1w'
   end
 end
 
 get '/' do
-  redirect '/next'
-end
-
-get '/next' do
   reminder = Reminder.by_priority.overdue.first
-  if reminder.nil?
-    return redirect '/overdues'
+  if reminder
+    return redirect "/reminders/#{reminder.id}"
   end
-  redirect "/reminders/#{reminder.id}"
+
+  herb :index
 end
 
 get '/reminders/:id' do
@@ -95,14 +98,22 @@ end
 post '/reschedule/:id' do
   r = Reminder.first!(id: params[:id])
   r.reschedule!(params[:reschedule_on])
-  # redirect "/reminders/#{r.id}"
-  redirect '/next'
+  redirect '/'
 end
 
 get '/overdues' do
   dataset = Reminder.by_priority.overdue
   herb :overdues, locals: {
     overdues: dataset,
+    title: 'Overdue reminders',
+  }
+end
+
+get '/today' do
+  dataset = Reminder.by_priority.today
+  herb :overdues, locals: {
+    overdues: dataset,
+    title: 'Reminders today',
   }
 end
 

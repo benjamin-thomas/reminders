@@ -166,13 +166,7 @@ Reminder.dataset_module do
     (priority >= 0) & (trigger_on <= Time.now)
   }
 
-  # def self.overdue
-  #   where {
-  #     (priority >=0) & (trigger_on <= Time.now)
-  #   }
-  # end
-
-  # def self.prioritized
-  #   where{ priority >= 0 }
-  # end
+  subset :today, -> {
+    (priority >=0) & (trigger_on < Date.today+1)
+  }
 end

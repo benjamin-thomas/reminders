@@ -1,4 +1,4 @@
-<h1>Overdue reminders</h1>
+<h1><%= title %></h1>
 
 <table>
   <thead>
@@ -17,7 +17,9 @@
     <% overdues.each_with_index do |r, i| %>
       <tr>
         <td><%= i + 1 %></td>
-        <td><%= r.id %></td>
+        <td>
+          <a href="/reminders/<%= r.id %>"><%= r.id %></a>
+        </td>
         <td><%= r.priority %></td>
         <td><%= time_ago r.trigger_on %></td>
 
