@@ -5,20 +5,34 @@
 
   <div id="update-standby-date-section" style="margin-top: 30px">
 
-    <% [:months, :weeks, :days, :hours, :minutes].each do |id| %>
-      <label for="<%= id %>"><%= id %></label>
+    <% [:months, :weeks, :days, :hours].each do |id| %>
+      <label for="<%= id %>"><%= id.capitalize %></label>
       <input type="number" id="<%= id %>" name="<%= id %>" style="max-width: 70px;">
 
     <% end %>
 
+      <label for="minutes">Minutes</label>
+      <input type="number" id="minutes" name="minutes" step="<%= rand(10)+15 %>" style="max-width: 70px;">
+
     <input type="submit" value="Push back" id="push-back">
+
+
+<style>
+#next-at a {
+  margin-left: 10px;
+  }
+</style>
 
     <div style="margin-top: 30px">
       <div style="margin-left: 10px;">
 
         <span id="next-at">
-          <a href="#" class="btn btn-default" data-hour="9">+1j @9h</a>
-          <a href="#" class="btn btn-default" data-hour="14">+1j @14h</a>
+          <a href="#" class="btn btn-default" data-hour="7">+1j @7h</a>
+          <a href="#" class="btn btn-default" data-hour="12">+1j @12h</a>
+          <a href="#" class="btn btn-default" data-hour="17">+1j @17h</a>
+          <a href="#" class="btn btn-default" data-hour="18">+1j @18h</a>
+          <a href="#" class="btn btn-default" data-hour="20">+1j @20h</a>
+          <a href="#" class="btn btn-default" data-hour="23">+1j @23h</a>
           <a href="#" class="btn btn-default" data-hour="rand">+1j @aléat.</a>
         </span>
 
