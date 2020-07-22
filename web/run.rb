@@ -41,8 +41,12 @@ else
 end
 
 Dotenv.load('~/.env/reminders')
-load './config/database.rb'
-require_relative '../models/reminder'
+
+$offline = ENV['OFFLINE'] == '1'
+if !$offline
+  load './config/database.rb'
+  require_relative '../models/reminder'
+end
 
 Tilt.register Tilt::ERBTemplate, 'html.erb'
 
@@ -78,6 +82,8 @@ def time_ago(time)
 end
 
 get '/' do
+  return herb :index if $offline
+
   reminder = Reminder.by_priority.overdue.first
   if reminder
     return redirect "/reminders/#{reminder.id}"
@@ -101,8 +107,26 @@ post '/reschedule/:id' do
   redirect '/'
 end
 
+FakeReminder = Class.new do
+  COLUMNS = [ :id, :priority, :trigger_on, :descr ]
+  attr_reader *COLUMNS
+
+  def initialize(id: nil, priority: nil, trigger_on: nil, descr: nil)
+    @id = id || 1
+    @priority = priority || 0
+    @trigger_on = trigger_on || Time.now - 1
+    @descr = descr || 'Do something'
+  end
+end
+
+FakeRemindersOverdue = 10.times.map { FakeReminder.new }
+
 get '/overdues' do
-  dataset = Reminder.by_priority.overdue
+  dataset = if $offline
+              FakeRemindersOverdue
+            else
+              Reminder.by_priority.overdue
+            end
   herb :overdues, locals: {
     overdues: dataset,
     title: 'Overdue reminders',

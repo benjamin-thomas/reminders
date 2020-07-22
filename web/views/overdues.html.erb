@@ -21,7 +21,17 @@
           <a href="/reminders/<%= r.id %>"><%= r.id %></a>
         </td>
         <td><%= r.priority %></td>
-        <td><%= time_ago r.trigger_on %></td>
+
+        <%
+            style = if r.trigger_on < Time.now
+                      "color:red;font-weight:bold;"
+                    else
+                      ""
+                    end
+        %>
+      <td title="<%= r.trigger_on %>" style="<%= style %>">
+        <%= time_ago r.trigger_on %>
+      </td>
 
         <% short_descr, extra_descr = r.descr.split(';') %>
         <td><%= short_descr %></td>
