@@ -72,6 +72,8 @@ def time_ago(time)
     '< 3h'
   when (ONE_HOUR * 3)...(ONE_HOUR * 4)
     '< 4h'
+  when (ONE_HOUR * 4)...(ONE_HOUR * 8)
+    '< 8h'
   when ONE_HOUR...ONE_DAY
     'today'
   when ONE_DAY...ONE_WEEK

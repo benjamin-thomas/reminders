@@ -7,7 +7,9 @@
 
     <% [:months, :weeks, :days, :hours].each do |id| %>
       <label for="<%= id %>"><%= id.capitalize %></label>
-      <input type="number" id="<%= id %>" name="<%= id %>" style="max-width: 70px;">
+      <input
+      <%= id == :hours && 'autofocus' %>
+        type="number" id="<%= id %>" name="<%= id %>" style="max-width: 70px;">
 
     <% end %>
 
