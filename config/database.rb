@@ -1,6 +1,5 @@
-DB_PATH = ENV.fetch('REMINDERS_DB_PATH')
-DB_DIR = File.dirname(DB_PATH)
-DB_EXPORT_PATH = File.join(DB_DIR, '.reminders.csv')
+DB_DIR = File.expand_path('~/.local/var/my_reminders')
+DB_EXPORT_PATH = File.join(DB_DIR, 'reminders.csv')
 
 # https://sequel.jeremyevans.net/rdoc/files/doc/opening_databases_rdoc.html
 DB = Sequel.connect(ENV.fetch('DATABASE_URL'), connect_timeout: 10)

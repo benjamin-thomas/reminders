@@ -1,5 +1,11 @@
 #!/usr/bin/env ruby
 
+=begin
+Run as such:
+
+envdir .env ./bin/reminders
+=end
+
 # Std library
 require 'optparse'
 require 'logger'
@@ -20,16 +26,12 @@ begin
   require 'colored'
 rescue LoadError
   abort("
-    # Note: ruby-pg is buggy/unusable in Ubuntu 18.04
-    apt remove ruby-pg
-    apt-get install ruby-dev libpq-dev
-    gem install --user pg
+    Install missing dependencies:
 
-    apt-get install ruby-dotenv ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic ruby-colored
+    apt-get install ruby-pg ruby-dbus ruby-awesome-print ruby-sequel ruby-pg ruby-terminal-table ruby-chronic ruby-colored
         ")
 end
 
-Dotenv.load('~/.env/reminders')
 load File.expand_path(File.join(__dir__, '../config/database.rb'))
 require_relative '../models/reminder'
 
@@ -595,6 +597,8 @@ def run_cli
         next
       elsif (m = /next (?<code>\d+[mhdwM])/.match(cmd)) # next
         table(
+          # Error here: Invalid filter expression:
+          # I'll have to play with the REPL to find what's wrong...
           Reminder.next(m[:code]).order(*Reminder::BY_TRIGGER_ON_FIRST)
         )
         next
